@@ -4,6 +4,16 @@ A custom Home Assistant integration (HACS) that provides dynamic load balancing 
 
 This project gives Home Assistant users a native, no-helper-required solution to limit charging current to an EV charger based on a whole-home power meter, household limits, and user preferences.
 
+---
+
+> ⚠️ **DISCLAIMER — Use at your own risk.**
+>
+> This integration is provided **as-is**, without any warranty of any kind, express or implied. Installing and running this software may affect your EV charger, home electrical circuit, and connected devices. You are solely responsible for any consequences that result from its use.
+>
+> You are free to **review, test, and audit** the source code before using it. Contributions, bug reports, and security disclosures are welcome.
+
+---
+
 > ⚠️ **Current limitation (PR-1):** This integration currently supports **one charger per instance**. Multiple-charger support (water-filling fair distribution) is planned for a future PR. Multiple instances of this integration are not supported — only one config entry can be created. See the [roadmap](docs/development/2026-02-19-research-plan.md) for details.
 
 Status: In development — custom integration (PR-1: scaffold + Config Flow complete)
