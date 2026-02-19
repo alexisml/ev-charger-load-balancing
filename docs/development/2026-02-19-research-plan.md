@@ -36,17 +36,17 @@ This document collects the research plan, proposed README content, the blueprint
 
 ---
 
-## Discovery — map capabilities (1–2 days)
+## Discovery — map capabilities (0.5 day)
+
+Note: Deep inspection of lbbrhzn/ocpp internals is lower priority since the user will provide the start/stop/set_current actions as configurable scripts. The integration only needs to call those user-supplied services.
 
 Tasks:
-- Inspect lbbrhzn/ocpp repository to identify:
-  - Entities created per charger.
-  - Services and their payloads for sending OCPP messages (SetChargingProfile, RemoteStart/Stop, etc).
-  - How chargers are referenced (entity_id, connector_id).
-  - Any existing helper services to set charging current.
+- Confirm the service/script interface expected by the user (set_current, stop_charging, start_charging) and document the agreed data payload.
+- Identify how chargers are referenced (entity_id or device_id) so our entities can be linked to the correct device in the HA device registry.
+- Optionally skim lbbrhzn/ocpp to understand the device model it creates, to ensure our device registry entries can reference the same device.
 
 Deliverables:
-- Short report with entity/service names, example service calls and file references.
+- Short note with agreed service payload format and device-linking approach.
 
 ---
 
@@ -102,11 +102,14 @@ Criteria:
 
 ### Entities (persistent, per charger where appropriate)
 
-- `sensor.ev_lb_<charger_id>_current_set` (float, A) — last requested/attempted current
-- `binary_sensor.ev_lb_<charger_id>_active` — on when LB actively controlling the charger
-- `sensor.ev_lb_available_current_a` (float) — computed available current
-- `sensor.ev_lb_house_power_w` (float) — mirror/derived
-- `sensor.ev_<charger_id>_actual_current_a` (optional) — if charger reports measured current (sync if available)
+All per-charger entities MUST be registered under the charger's device in the HA device registry. This allows them to appear grouped under the charger device in the HA UI (Settings → Devices) rather than as standalone orphan entities.
+
+- Device registry: register a `DeviceEntry` per charger using a stable unique identifier (e.g., charger serial or config-entry-scoped ID). Associate all per-charger entities with `device_id` or `via_device` pointing to the charger device.
+- `sensor.ev_lb_<charger_id>_current_set` (float, A) — last requested/attempted current; linked to charger device
+- `binary_sensor.ev_lb_<charger_id>_active` — on when LB actively controlling the charger; linked to charger device
+- `sensor.ev_lb_available_current_a` (float) — computed available current (global, not per-charger)
+- `sensor.ev_lb_house_power_w` (float) — mirror/derived (global)
+- `sensor.ev_<charger_id>_actual_current_a` (optional) — if charger reports measured current; linked to charger device
 
 ### Inputs (either created by integration or external input_* helpers)
 
@@ -186,10 +189,19 @@ Limitations of the blueprint approach:
 
 ## Testing & QA
 
-- Unit tests for current computation logic (clamping, fairness algorithm).
-- Integration tests using HA test harness or pytest-homeassistant-custom-component.
-- Manual tests with a real or simulated OCPP charger.
-- Regression tests for edge cases: min current boundary, disabled state, sensor unavailable.
+Unit tests are **required** for any implementation (integration, AppDaemon app, or blueprint-supporting scripts).
+
+- Unit tests (mandatory):
+  - Current computation logic: available current calculation, clamping to min/max/step, fairness distribution across multiple chargers.
+  - Edge cases: min current boundary, disabled state (`ev_lb_enabled = off`), power sensor unavailable/unknown, charger at zero load.
+  - Use `pytest` with `pytest-homeassistant-custom-component` for HA integration tests; plain `pytest` for pure-Python AppDaemon logic.
+- Integration tests:
+  - HA test harness: verify entities are created, linked to the correct device, and update state correctly on power meter changes.
+  - Verify service calls (set_current, stop_charging, start_charging) are invoked with the correct payload.
+- Manual / end-to-end tests:
+  - Test with a real or simulated OCPP charger.
+- Regression tests:
+  - Cover each edge case identified during prototyping; add a test before fixing any bug.
 
 ---
 
@@ -197,8 +209,8 @@ Limitations of the blueprint approach:
 
 | Step | Owner | ETA | Deliverable |
 |------|-------|-----|-------------|
-| Discovery: map lbbrhzn/ocpp entities and services | alexisml | +2 days | Short report in docs/development/ |
-| AppDaemon prototype (single charger) | alexisml | +5 days | Working app + notes |
-| Evaluate prototype, choose delivery mechanism | alexisml | +6 days | Decision doc in docs/development/ |
-| Implement chosen approach (MVP) | alexisml | +14 days | Code + blueprint/integration |
-| HACS manifest, README, release | alexisml | +16 days | Publishable HACS repo |
+| Discovery: confirm service payload & device-linking approach | alexisml | +0.5 days | Short note in docs/development/ |
+| AppDaemon prototype (single charger) | alexisml | +3 days | Working app + notes |
+| Evaluate prototype, choose delivery mechanism | alexisml | +4 days | Decision doc in docs/development/ |
+| Implement chosen approach (MVP) with unit tests | alexisml | +12 days | Code + tests + blueprint/integration |
+| HACS manifest, README, release | alexisml | +14 days | Publishable HACS repo |
