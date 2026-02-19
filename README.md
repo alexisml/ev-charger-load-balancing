@@ -30,28 +30,25 @@ Every time the power meter reports a new value, the balancer runs the following 
 Power meter changes
         │
         ▼
-┌───────────────────────────────────────────────┐
-│  Compute available EV current                 │
-│                                               │
-│  non_ev_load_a = (house_power_w               │
-│                   - current_ev_a × voltage_v) │
-│                   / voltage_v                 │
-│                                               │
-│  available_a = service_current_a              │
-│                - non_ev_load_a                │
-└───────────────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│  Compute available headroom              │
+│                                          │
+│  available_a = service_current_a         │
+│                - house_power_w / voltage_v│
+└──────────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────────────────────┐
+│  target_a = min(current_ev_a + available_a,              │
+│                 max_charger_a)                           │
+│  (floor to 1 A step)                                     │
+└──────────────────────────────────────────────────────────┘
         │
         ▼
 ┌──────────────────────────────┐
-│  available_a < min_ev_a ?    │──── YES ──▶  stop_charging()  ◀── instant
+│  target_a < min_ev_a ?       │──── YES ──▶  stop_charging()  ◀── instant
 └──────────────────────────────┘              (charger OFF)
         │ NO
-        ▼
-┌──────────────────────────────────────────────┐
-│  target_a = min(available_a, max_charger_a)  │
-│  (floor to 1 A step)                         │
-└──────────────────────────────────────────────┘
-        │
         ▼
 ┌─────────────────────────────────┐
 │  target_a < current_a ?         │
@@ -78,14 +75,14 @@ Power meter changes
 ```
          ┌─────────────────────────────────────────────────────────────────┐
          │                                                                 │
-         │  available_a ≥ min_ev_a  AND  ramp-up elapsed (or first start) │
+         │  target_a ≥ min_ev_a  AND  ramp-up elapsed (or first start)    │
          ▼                                                                 │
-  ┌─────────────┐    available_a < min_ev_a    ┌──────────────────┐       │
+  ┌─────────────┐    target_a < min_ev_a       ┌──────────────────┐       │
   │   CHARGING  │ ──────────────────────────▶  │   STOPPED        │       │
   │  (current   │  ◀── instant stop            │  (charger off)   │       │
   │   = target) │                              └──────────────────┘       │
   └─────────────┘                                       │                 │
-         ▲                                              │ available_a      │
+         ▲                                              │ target_a         │
          │                                              │ ≥ min_ev_a       │
          │                                              │ AND              │
          └──────────────────────────────────────────────┘ ramp-up elapsed ┘

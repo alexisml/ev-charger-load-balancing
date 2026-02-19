@@ -48,33 +48,31 @@ RAMP_UP_TIME_DEFAULT: float = 30.0  # Seconds — cooldown before increasing cur
 
 def compute_available_current(
     house_power_w: float,
-    current_ev_a: float,
     max_service_a: float,
     voltage_v: float = VOLTAGE_DEFAULT,
 ) -> float:
-    """Return the total current available for EV charging.
+    """Return the current headroom available above the current total draw.
 
-    The formula derives the non-EV load from the total house power, then
-    subtracts it from the service limit:
+    The formula converts the total metered house power (including any active
+    EV charging) into Amps and subtracts it from the service limit:
 
-        non_ev_power_w  = house_power_w  - current_ev_a * voltage_v
-        available_ev_a  = max_service_a  - non_ev_power_w / voltage_v
+        available_a = max_service_a - house_power_w / voltage_v
+
+    A positive value means there is headroom to increase EV charging; a
+    negative value means the service limit is already exceeded and the EV
+    current must be reduced immediately.
 
     Args:
         house_power_w:  Current total household power draw in Watts,
                         **including** any active EV charging.
-        current_ev_a:   Sum of current charging currents (Amps) across all
-                        chargers managed by this app.
         max_service_a:  Whole-house breaker / service rating in Amps.
         voltage_v:      Nominal supply voltage in Volts.
 
     Returns:
-        Available current for EV charging in Amps (may be negative when the
-        non-EV load already exceeds the service limit).
+        Headroom in Amps above the current total draw.  May be negative when
+        total consumption already exceeds the service limit.
     """
-    non_ev_power_w = house_power_w - current_ev_a * voltage_v
-    non_ev_a = non_ev_power_w / voltage_v
-    return max_service_a - non_ev_a
+    return max_service_a - house_power_w / voltage_v
 
 
 def clamp_current(
@@ -295,13 +293,14 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
 
             available_a = compute_available_current(
                 house_power_w=house_power_w,
-                current_ev_a=current_ev_a,
                 max_service_a=max_service_a,
                 voltage_v=voltage_v,
             )
 
+            # Distribute the total current the EVs may draw in aggregate.
+            # current_ev_a + headroom = service_limit - non_ev_load
             targets = distribute_current(
-                available_a=available_a,
+                available_a=current_ev_a + available_a,
                 chargers=charger_specs,
             )
 

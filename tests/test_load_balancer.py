@@ -31,45 +31,38 @@ from ev_lb import (
 
 class TestComputeAvailableCurrentBasic:
     def test_no_ev_load(self):
-        """With no EV charging, available = service_limit - non_ev_load."""
-        # 5 kW non-EV @ 230 V → ~21.7 A; limit 32 A → ~10.3 A available
+        """With no EV charging, available = service_limit - house_load."""
+        # 5 kW total @ 230 V → ~21.7 A; limit 32 A → ~10.3 A headroom
         available = compute_available_current(
             house_power_w=5000.0,
-            current_ev_a=0.0,
             max_service_a=32.0,
             voltage_v=230.0,
         )
         assert abs(available - (32.0 - 5000.0 / 230.0)) < 1e-9
 
-    def test_with_ev_load(self):
-        """EV contribution is subtracted from house power before computing non-EV."""
-        # House total: 7 kW; EV draw: 16 A × 230 V = 3680 W
-        # Non-EV power: 7000 - 3680 = 3320 W → 14.43 A
-        # Available: 32 - 14.43 ≈ 17.57 A
+    def test_house_power_includes_ev_draw(self):
+        """House power includes EV draw; formula uses total consumption directly."""
+        # House total 7 kW (including EV): available = 32 - 7000/230 ≈ 1.57 A headroom
         available = compute_available_current(
             house_power_w=7000.0,
-            current_ev_a=16.0,
             max_service_a=32.0,
             voltage_v=230.0,
         )
-        expected = 32.0 - (7000.0 - 16.0 * 230.0) / 230.0
-        assert abs(available - expected) < 1e-9
+        assert abs(available - (32.0 - 7000.0 / 230.0)) < 1e-9
 
     def test_available_matches_full_capacity(self):
-        """When non-EV load is zero, all capacity is available."""
+        """When total draw is zero, all capacity is available."""
         available = compute_available_current(
             house_power_w=0.0,
-            current_ev_a=0.0,
             max_service_a=32.0,
         )
         assert abs(available - 32.0) < 1e-9
 
-    def test_non_ev_exceeds_service_limit(self):
-        """Returns negative when non-EV load alone exceeds service limit."""
-        # 9 kW @ 230 V ≈ 39.1 A > 32 A limit → negative available
+    def test_total_draw_exceeds_service_limit(self):
+        """Returns negative when total draw already exceeds service limit."""
+        # 9 kW @ 230 V ≈ 39.1 A > 32 A limit → negative headroom
         available = compute_available_current(
             house_power_w=9000.0,
-            current_ev_a=0.0,
             max_service_a=32.0,
             voltage_v=230.0,
         )
@@ -79,12 +72,10 @@ class TestComputeAvailableCurrentBasic:
         """Default voltage of 230 V is used when not specified."""
         available_default = compute_available_current(
             house_power_w=2300.0,
-            current_ev_a=0.0,
             max_service_a=32.0,
         )
         available_explicit = compute_available_current(
             house_power_w=2300.0,
-            current_ev_a=0.0,
             max_service_a=32.0,
             voltage_v=VOLTAGE_DEFAULT,
         )
@@ -94,7 +85,6 @@ class TestComputeAvailableCurrentBasic:
         """Calculation scales correctly for 120 V systems."""
         available = compute_available_current(
             house_power_w=1200.0,
-            current_ev_a=0.0,
             max_service_a=100.0,
             voltage_v=120.0,
         )
@@ -287,7 +277,6 @@ class TestDisabledState:
         """Computation functions are stateless and work regardless of enabled flag."""
         available = compute_available_current(
             house_power_w=3000.0,
-            current_ev_a=0.0,
             max_service_a=32.0,
         )
         # 3000 W / 230 V ≈ 13.04 A; available ≈ 32 - 13.04 = 18.96 A → floored to 18 A
@@ -309,7 +298,6 @@ class TestPowerSensorUnavailable:
         """0 W house power → full service capacity available."""
         available = compute_available_current(
             house_power_w=0.0,
-            current_ev_a=0.0,
             max_service_a=32.0,
         )
         result = clamp_current(available, max_charger_a=32.0, min_charger_a=6.0)

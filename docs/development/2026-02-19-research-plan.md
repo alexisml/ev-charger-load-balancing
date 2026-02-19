@@ -183,6 +183,22 @@ Limitations of the blueprint approach:
 
 ## Design decisions
 
+### Available current formula
+
+The headroom available for EV charging is computed as:
+
+```
+available_a = service_current_a - house_power_w / voltage_v
+```
+
+`house_power_w` is the **total** metered household power, including any active EV charging.  `available_a` is therefore the headroom above the current total draw.  The EV target is derived as:
+
+```
+ev_target_a = current_ev_a + available_a   (then clamped to [min_ev_a, max_charger_a])
+```
+
+The stop condition is checked against the final `target_a`, not against `available_a` directly, because `max_charger_a` may cap the target below `min_ev_a` even when there is sufficient headroom.
+
 ### Current adjustment asymmetry (instant down, delayed up)
 
 **Current reductions are always applied immediately.** When the balancer computes a lower (or zero) target for a charger, the `set_current` or `stop_charging` service is called on the very next power-meter event with no delay.
