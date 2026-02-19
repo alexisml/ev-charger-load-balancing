@@ -185,22 +185,27 @@ def apply_ramp_up_limit(
 ) -> float:
     """Prevent increasing current before the ramp-up cooldown has elapsed.
 
-    After a dynamic current reduction, the app waits *ramp_up_time_s* seconds
-    before allowing the target to rise again.  This avoids oscillation when
-    household load fluctuates around the service limit.
+    **Reductions are always applied instantly** — this function never delays a
+    decrease in current.  Only increases are subject to the cooldown: after a
+    dynamic current reduction the app waits *ramp_up_time_s* seconds before
+    allowing the target to rise again.  This avoids oscillation when household
+    load fluctuates around the service limit.
 
     Args:
-        prev_a:             Current charging current in Amps (last set value).
-        target_a:           Newly computed target current in Amps.
+        prev_a:              Current charging current in Amps (last set value).
+        target_a:            Newly computed target current in Amps.
         last_reduction_time: Monotonic timestamp (seconds) when the current was
                              last reduced for this charger, or ``None`` if there
                              has been no reduction yet.
-        now:                Current monotonic timestamp in seconds.
-        ramp_up_time_s:     Cooldown period in seconds.
+        now:                 Current monotonic timestamp in seconds.
+        ramp_up_time_s:      Cooldown period in seconds before an increase is
+                             allowed after a reduction.
 
     Returns:
-        *target_a* if the increase is permitted; *prev_a* if the cooldown has
-        not yet elapsed (hold at current level).
+        *target_a* immediately when the target is lower than or equal to
+        *prev_a* (instant reduction), or when no prior reduction has been
+        recorded, or when the cooldown has already elapsed.  Returns *prev_a*
+        (hold) only when the cooldown period has not yet elapsed.
     """
     if target_a > prev_a and last_reduction_time is not None:
         elapsed = now - last_reduction_time

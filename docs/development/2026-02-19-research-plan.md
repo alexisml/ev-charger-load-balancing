@@ -118,6 +118,7 @@ All per-charger entities MUST be registered under the charger's device in the HA
 - `input_number.ev_lb_min_current_before_shutdown_a` — default 6 A; if set lower than charger min, consider shutdown behavior
 - `input_boolean.ev_lb_enabled` — global enable/disable for dynamic LB
 - `input_number.ev_lb_user_limit_w` — optional overall power limit to respect
+- `input_number.ev_lb_voltage_v` — supply voltage in Volts (default 230 V); allows runtime changes without restarting AppDaemon
 
 ### Configurable actions (provided as service strings or script entity IDs in the integration config)
 
@@ -177,6 +178,26 @@ Limitations of the blueprint approach:
 2. Listen to power meter entity; compute and dispatch current adjustments.
 3. Use `self.call_service()` to invoke OCPP or user-provided scripts.
 4. Persist state in AppDaemon's entity helper or HA input helpers.
+
+---
+
+## Design decisions
+
+### Current adjustment asymmetry (instant down, delayed up)
+
+**Current reductions are always applied immediately.** When the balancer computes a lower (or zero) target for a charger, the `set_current` or `stop_charging` service is called on the very next power-meter event with no delay.
+
+**Current increases are subject to a configurable ramp-up cooldown** (`ramp_up_time_s`, default 30 s). After any dynamic reduction the balancer records the timestamp and holds increases until the cooldown has fully elapsed. This asymmetry deliberately prioritises grid safety: overloads must be resolved instantly, but premature ramp-back would cause rapid oscillation if the household load is fluctuating near the service limit.
+
+The cooldown is implemented in the pure function `apply_ramp_up_limit()` (`apps/ev_lb/ev_lb.py`) and is fully covered by unit tests.
+
+### Supply voltage as a runtime input
+
+The supply voltage (used to convert Watts ↔ Amps) is exposed as an HA `input_number` helper (`input_number.ev_lb_voltage_v`) so it can be changed without restarting AppDaemon. A static `voltage_v` YAML key is also supported as a fallback when the helper is not present.
+
+### Ramp-up time as a YAML config key
+
+`ramp_up_time_s` is a static config key in `ev_lb.yaml` (default 30 s). It is intentionally not an HA helper because it is an implementation tuning parameter rather than a user-facing runtime preference. Changing it requires an AppDaemon restart, which is acceptable.
 
 ### Blueprint
 

@@ -184,27 +184,34 @@ enabled:     {{ states('input_boolean.ev_lb_enabled') }}
 4. Check `sensor.ev_lb_charger_1_current_set` = **16**.
 5. Check `binary_sensor.ev_lb_charger_1_active` = **on**.
 
-#### Test 2 — High household load (current reduced)
+#### Test 2 — High household load (current reduced instantly)
+
+**Reductions are applied immediately** — no ramp-up delay applies when going down.
 
 1. Set `input_number.sim_house_power_w` to **6500** W (≈ 28.3 A at 230 V, including 16 A EV).  
    Non-EV load ≈ 28.3 − 16 = 12.3 A → available ≈ 32 − 12.3 = **19.7 A** → 16 A (capped).
 2. Push higher: set to **8000** W.  
    Non-EV load ≈ (8000 − 16×230)/230 ≈ 18.8 A → available ≈ 32 − 18.8 = **13.2 A** → 13 A.
-3. Verify `sensor.ev_lb_charger_1_current_set` = **13**.
+3. Verify `sensor.ev_lb_charger_1_current_set` drops to **13** on the very next power-meter state change (no delay).
 
-#### Test 3 — Overload → stop charging
+#### Test 3 — Overload → stop charging (instant)
 
 1. Set `input_number.sim_house_power_w` to **9500** W.  
    Non-EV load ≈ (9500 − 0)/230 ≈ 41.3 A > 32 A → available < 0 → below min.
-2. Log should show: `ev_lb stop_charging: charger=charger_1`
+2. Log should show immediately: `ev_lb stop_charging: charger=charger_1`
 3. `sensor.ev_lb_charger_1_current_set` = **0**, `binary_sensor.ev_lb_charger_1_active` = **off**.
 
-#### Test 4 — Ramp-up cooldown
+#### Test 4 — Ramp-up cooldown (asymmetric: down is instant, up is delayed)
 
-1. After test 3 (current was reduced/stopped), immediately reduce the simulated load back to 3000 W.
-2. Within the first 30 s the current should **not** increase yet (held at 0 or previous reduced value).
-3. After 30 s the current should increase back to 16 A.  
-   Watch `sensor.ev_lb_charger_1_current_set` in **History**.
+This test demonstrates the deliberate asymmetry: reductions are instant, increases are held for `ramp_up_time_s` (default 30 s) to prevent oscillation.
+
+1. Start from Test 3's state (charger stopped, load = 9500 W).
+2. Immediately set `input_number.sim_house_power_w` back to **3000** W.
+3. **Within the first 30 s**: `sensor.ev_lb_charger_1_current_set` should stay at **0** (held, not yet allowed to ramp up).
+4. **After 30 s**: the current should increase back toward 16 A on the next power-meter event.  
+   Watch `sensor.ev_lb_charger_1_current_set` in **History** — you will see the step-up happen after the cooldown.
+
+> **Tip for faster testing:** Temporarily set `ramp_up_time_s: 5` in `ev_lb.yaml` and restart AppDaemon to reduce the wait to 5 seconds.
 
 #### Test 5 — Disable load balancing
 
