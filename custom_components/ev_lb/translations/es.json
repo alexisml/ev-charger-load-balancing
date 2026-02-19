@@ -22,5 +22,33 @@
     "abort": {
       "already_configured": "El Balanceo de Carga para Cargadores de VE ya está configurado."
     }
+  },
+  "entity": {
+    "sensor": {
+      "current_set": {
+        "name": "Corriente de carga establecida"
+      },
+      "available_current": {
+        "name": "Corriente disponible"
+      }
+    },
+    "binary_sensor": {
+      "active": {
+        "name": "Balanceo de carga activo"
+      }
+    },
+    "number": {
+      "max_charger_current": {
+        "name": "Corriente máxima del cargador"
+      },
+      "min_ev_current": {
+        "name": "Corriente mínima del VE"
+      }
+    },
+    "switch": {
+      "enabled": {
+        "name": "Balanceo de carga habilitado"
+      }
+    }
   }
 }

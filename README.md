@@ -16,7 +16,7 @@ This project gives Home Assistant users a native, no-helper-required solution to
 
 > ⚠️ **Current limitation (PR-1):** This integration currently supports **one charger per instance**. Multiple-charger support (water-filling fair distribution) is planned for a future PR. Multiple instances of this integration are not supported — only one config entry can be created. See the [roadmap](docs/development/2026-02-19-research-plan.md) for details.
 
-Status: In development — custom integration (PR-1: scaffold + Config Flow complete)
+Status: In development — custom integration (PR-2: core entities + device linking complete)
 
 ## Why a custom integration?
 
@@ -161,7 +161,7 @@ Available current pool
 ## Quick start / Next actions
 
 1. ~~Scaffold `custom_components/ev_lb/` with `manifest.json`, `__init__.py`, `config_flow.py`.~~ ✅ Done (PR-1)
-2. Add `sensor.py`, `binary_sensor.py`, `number.py`, `switch.py`.
+2. ~~Add `sensor.py`, `binary_sensor.py`, `number.py`, `switch.py`.~~ ✅ Done (PR-2)
 3. Port the computation core from `tests/` into the integration.
 4. Write HA integration tests using `pytest-homeassistant-custom-component`.
 5. Publish via HACS.

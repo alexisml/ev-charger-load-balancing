@@ -22,5 +22,33 @@
     "abort": {
       "already_configured": "EV Charger Load Balancing is already configured."
     }
+  },
+  "entity": {
+    "sensor": {
+      "current_set": {
+        "name": "Charging current set"
+      },
+      "available_current": {
+        "name": "Available current"
+      }
+    },
+    "binary_sensor": {
+      "active": {
+        "name": "Load balancing active"
+      }
+    },
+    "number": {
+      "max_charger_current": {
+        "name": "Max charger current"
+      },
+      "min_ev_current": {
+        "name": "Min EV current"
+      }
+    },
+    "switch": {
+      "enabled": {
+        "name": "Load balancing enabled"
+      }
+    }
   }
 }

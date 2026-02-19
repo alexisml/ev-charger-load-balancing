@@ -259,7 +259,7 @@ Unit tests are **required** for any implementation (integration, AppDaemon app, 
 | Step | PR | Owner | ETA | Deliverable | Status |
 |------|-----|-------|-----|-------------|--------|
 | Scaffold custom integration | PR-1 | alexisml | +2 days | `custom_components/ev_lb/` with Config Flow, `hacs.json`, CI workflow | ✅ Done |
-| Core entities and device linking | PR-2 | alexisml | +4 days | `sensor.py`, `binary_sensor.py`, `number.py`, `switch.py`; charger device entry | |
+| Core entities and device linking | PR-2 | alexisml | +4 days | `sensor.py`, `binary_sensor.py`, `number.py`, `switch.py`; charger device entry | ✅ Done |
 | Single-charger balancing engine | PR-3 | alexisml | +6 days | Port computation core + power-meter listener | |
 | Action execution contract | PR-4 | alexisml | +7 days | `set_current` / `stop_charging` / `start_charging` service calls | |
 | Multi-charger fairness | PR-5 | alexisml | +9 days | `distribute_current` water-filling logic | |
