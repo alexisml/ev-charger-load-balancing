@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EV Charger Load Balancing",
+        "description": "Configure the power meter and electrical service parameters. This integration currently supports one charger. Multi-charger support is planned for a future release.",
+        "data": {
+          "power_meter_entity": "Power meter sensor",
+          "voltage": "Supply voltage",
+          "max_service_current": "Max service current (breaker rating)"
+        },
+        "data_description": {
+          "power_meter_entity": "Sensor entity that reports total household power consumption in Watts.",
+          "voltage": "Nominal supply voltage in Volts (used to convert W ↔ A).",
+          "max_service_current": "Whole-house breaker rating in Amps. Charging will never exceed this limit."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "The selected power meter entity was not found."
+    },
+    "abort": {
+      "already_configured": "EV Charger Load Balancing is already configured."
+    }
+  }
+}

@@ -2,9 +2,11 @@
 
 A custom Home Assistant integration (HACS) that provides dynamic load balancing for EV chargers, using a power meter and the lbbrhzn/ocpp integration.
 
-This project gives Home Assistant users a native, no-helper-required solution to limit and distribute charging current to one or more EV chargers based on a whole-home power meter, household limits, and user preferences.
+This project gives Home Assistant users a native, no-helper-required solution to limit charging current to an EV charger based on a whole-home power meter, household limits, and user preferences.
 
-Status: Planning — custom integration
+> ⚠️ **Current limitation (PR-1):** This integration currently supports **one charger per instance**. Multiple-charger support (water-filling fair distribution) is planned for a future PR. Multiple instances of this integration are not supported — only one config entry can be created. See the [roadmap](docs/development/2026-02-19-research-plan.md) for details.
+
+Status: In development — custom integration (PR-1: scaffold + Config Flow complete)
 
 ## Why a custom integration?
 
@@ -15,7 +17,7 @@ A **custom HACS integration with Config Flow** solves this:
 - **No manual helper creation** — the user configures everything through Settings → Integrations → Add (a guided UI).
 - **Native HA entities** — the integration registers `number`, `switch`, `sensor`, and `binary_sensor` entities linked to a proper device in Settings → Devices.
 - **Persistent state** — config entries and entity states survive HA restarts.
-- **Multi-charger support** — the options flow handles adding/removing chargers at runtime.
+- **Multi-charger support** *(planned)* — future options flow will handle adding/removing chargers at runtime; currently one charger per instance only.
 - **HACS distribution** — install via HACS, configure in the UI, no YAML required.
 
 See [`docs/development/2026-02-19-lessons-learned.md`](docs/development/2026-02-19-lessons-learned.md) for the full evaluation.
@@ -111,9 +113,11 @@ Key rules:
 
 ---
 
-### Multi-charger fairness (water-filling)
+### Multi-charger fairness — planned feature
 
-When multiple chargers are active the available current is distributed fairly using a water-filling algorithm:
+> ⚠️ **Not yet implemented.** Multi-charger support is planned for a future PR (PR-5/PR-6). The water-filling algorithm is already unit-tested in `tests/test_load_balancer.py` and will be ported into the integration runtime. Possible future approaches include multiple config entries (one per power meter / site) or a single entry with an options flow to add/remove chargers.
+
+When multiple chargers are active the available current will be distributed fairly using a water-filling algorithm:
 
 ```
 Available current pool
@@ -146,7 +150,7 @@ Available current pool
 
 ## Quick start / Next actions
 
-1. Scaffold `custom_components/ev_lb/` with `manifest.json`, `__init__.py`, `config_flow.py`.
+1. ~~Scaffold `custom_components/ev_lb/` with `manifest.json`, `__init__.py`, `config_flow.py`.~~ ✅ Done (PR-1)
 2. Add `sensor.py`, `binary_sensor.py`, `number.py`, `switch.py`.
 3. Port the computation core from `tests/` into the integration.
 4. Write HA integration tests using `pytest-homeassistant-custom-component`.

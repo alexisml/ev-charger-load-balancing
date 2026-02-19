@@ -1,8 +1,8 @@
-Title: Testing guide — AppDaemon app and blueprint in Home Assistant
+Title: Testing guide — Custom integration, AppDaemon app, and blueprint in Home Assistant
 Date: 2026-02-19
 Author: alexisml
 Status: draft
-Summary: Step-by-step instructions for manually testing the EV charger load-balancing AppDaemon app (and the automation blueprint) in a live Home Assistant instance.
+Summary: Step-by-step instructions for testing the EV charger load-balancing custom integration (and legacy AppDaemon/blueprint approaches) in a live Home Assistant instance.
 
 ---
 
@@ -11,9 +11,10 @@ Summary: Step-by-step instructions for manually testing the EV charger load-bala
 | Requirement | Notes |
 |---|---|
 | Home Assistant (2023.6+) | Core, OS, or Container install |
-| AppDaemon 4.x | Installed as a HA add-on or standalone Docker container |
+| HACS | For installing the custom integration |
+| Python 3.12+ and pytest | For running unit tests locally |
+| AppDaemon 4.x | (Legacy) Only needed if testing the old AppDaemon prototype |
 | lbbrhzn/ocpp integration | Optional — needed for real OCPP charger; for testing you can use helper scripts instead |
-| HACS | Optional — for installing lbbrhzn/ocpp |
 
 ---
 
@@ -159,13 +160,21 @@ Use `input_number.sim_house_power_w` to drive the simulated load in tests.
 ### 5a — Unit tests (no HA required)
 
 ```bash
-pip install pytest
+pip install -r tests/requirements.txt
 python -m pytest tests/ -v
 ```
 
-Expected: all 39 tests pass.
+Expected: all 44 tests pass (39 load-balancer logic + 3 config flow + 2 integration setup/unload).
 
-### 5b — Functional tests in HA
+### 5b — Config flow tests only
+
+```bash
+python -m pytest tests/test_config_flow.py tests/test_init.py -v
+```
+
+These tests use `pytest-homeassistant-custom-component` to simulate the HA config flow UI.
+
+### 5c — Functional tests in HA (legacy AppDaemon approach)
 
 Open **Developer Tools → Template** and run the following to verify helpers are readable:
 

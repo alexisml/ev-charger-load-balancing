@@ -15,3 +15,12 @@ env/
 
 # AppDaemon runtime
 .storage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test artifacts
+test-results/
