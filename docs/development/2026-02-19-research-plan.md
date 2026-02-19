@@ -256,11 +256,13 @@ Unit tests are **required** for any implementation (integration, AppDaemon app, 
 
 ## Next steps, timeline, deliverables
 
-| Step | Owner | ETA | Deliverable | Status |
-|------|-------|-----|-------------|--------|
-| Scaffold custom integration | alexisml | +2 days | `custom_components/ev_lb/` with Config Flow | ✅ Done (PR-1) |
-| Register entities and device entry | alexisml | +4 days | Sensor, binary sensor, number, switch entities | |
-| Port computation core + power-meter listener | alexisml | +6 days | Working integration (single charger) | |
-| Multi-charger support via options flow | alexisml | +9 days | Add/remove chargers at runtime | |
-| Integration tests (`pytest-homeassistant-custom-component`) | alexisml | +11 days | Full test suite | |
-| HACS manifest, README, release | alexisml | +14 days | Publishable HACS repo | |
+| Step | PR | Owner | ETA | Deliverable | Status |
+|------|-----|-------|-----|-------------|--------|
+| Scaffold custom integration | PR-1 | alexisml | +2 days | `custom_components/ev_lb/` with Config Flow, `hacs.json`, CI workflow | ✅ Done |
+| Core entities and device linking | PR-2 | alexisml | +4 days | `sensor.py`, `binary_sensor.py`, `number.py`, `switch.py`; charger device entry | |
+| Single-charger balancing engine | PR-3 | alexisml | +6 days | Port computation core + power-meter listener | |
+| Action execution contract | PR-4 | alexisml | +7 days | `set_current` / `stop_charging` / `start_charging` service calls | |
+| Multi-charger fairness | PR-5 | alexisml | +9 days | `distribute_current` water-filling logic | |
+| Runtime charger management | PR-6 | alexisml | +10 days | Options flow for add/remove chargers | |
+| Manual override + observability | PR-7 | alexisml | +11 days | `ev_lb.set_limit` service + diagnostic state | |
+| Test stabilization + HACS release | PR-8 | alexisml | +14 days | Full integration tests, HACS-ready release | |
