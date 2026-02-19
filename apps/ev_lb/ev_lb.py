@@ -266,6 +266,9 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
                     self._current_set[idx] = 0.0
                     self._set_active_sensor(charger_id, False)
                 else:
+                    was_stopped = prev is None or prev == 0.0
+                    if was_stopped:
+                        self._start_charging(cfg, charger_id)
                     if target != prev:
                         self._set_current(cfg, charger_id, target)
                     self._current_set[idx] = target
