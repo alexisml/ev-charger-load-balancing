@@ -92,9 +92,11 @@ Criteria:
 
 ## Recommendation (summary)
 
-- Start with a fast AppDaemon prototype to validate logic and service interactions.
-- Provide a blueprint for users who want no extra runtime for simple single-charger setups.
-- If persistent sensors, multi-charger fairness, and better UX are desired (as requested), build a small custom integration (HACS) with ConfigFlow.
+**Decision (2026-02-19): build a custom HACS integration with Config Flow.**
+
+Both the AppDaemon app and the automation blueprint were prototyped and evaluated. Both were rejected because they require users to manually create `input_number` / `input_boolean` helpers for every runtime-configurable parameter. A custom integration with Config Flow is the only mechanism that eliminates manual helper creation and provides native HA device entries, persistent state, and a guided setup UI.
+
+See [`2026-02-19-lessons-learned.md`](2026-02-19-lessons-learned.md) for the full evaluation and rationale.
 
 ---
 
@@ -118,6 +120,7 @@ All per-charger entities MUST be registered under the charger's device in the HA
 - `input_number.ev_lb_min_current_before_shutdown_a` — default 6 A; if set lower than charger min, consider shutdown behavior
 - `input_boolean.ev_lb_enabled` — global enable/disable for dynamic LB
 - `input_number.ev_lb_user_limit_w` — optional overall power limit to respect
+- `input_number.ev_lb_voltage_v` — supply voltage in Volts (default 230 V); allows runtime changes without restarting AppDaemon
 
 ### Configurable actions (provided as service strings or script entity IDs in the integration config)
 
@@ -161,29 +164,57 @@ Limitations of the blueprint approach:
 
 ---
 
-## Implementation roadmaps
+## Implementation roadmap — Custom HACS integration
 
-### Integration (HACS custom component)
+1. Scaffold `custom_components/ev_lb/` with `manifest.json`, `__init__.py`, `config_flow.py`.
+2. Add `sensor.py`, `binary_sensor.py`, `number.py`, `switch.py`.
+3. Register entities at setup; link to a device entry per charger.
+4. Subscribe to power meter sensor state changes.
+5. Port computation core (`compute_available_current`, `distribute_current`, `apply_ramp_up_limit`) from `tests/` into the integration.
+6. Call configured `set_current` / `stop_charging` / `start_charging` services.
+7. Expose `ev_lb.set_limit` service for manual override.
+8. Write HA integration tests using `pytest-homeassistant-custom-component`.
+9. Publish via HACS.
 
-1. Scaffold integration with `config_flow.py`, `sensor.py`, `binary_sensor.py`.
-2. Register entities at setup.
-3. Subscribe to power meter sensor state changes.
-4. Compute available current, call configured set_current service.
-5. Expose service `ev_lb.set_limit` for manual override.
+---
 
-### AppDaemon app
+## Design decisions
 
-1. Create `apps/ev_lb/ev_lb.py`.
-2. Listen to power meter entity; compute and dispatch current adjustments.
-3. Use `self.call_service()` to invoke OCPP or user-provided scripts.
-4. Persist state in AppDaemon's entity helper or HA input helpers.
+### Available current formula
+
+The headroom available for EV charging is computed as:
+
+```
+available_a = service_current_a - house_power_w / voltage_v
+```
+
+`house_power_w` is the **total** metered household power, including any active EV charging.  `available_a` is therefore the headroom above the current total draw.  The EV target is derived as:
+
+```
+ev_target_a = current_ev_a + available_a   (then clamped to [min_ev_a, max_charger_a])
+```
+
+The stop condition is checked against the final `target_a`, not against `available_a` directly, because `max_charger_a` may cap the target below `min_ev_a` even when there is sufficient headroom.
+
+### Current adjustment asymmetry (instant down, delayed up)
+
+**Current reductions are always applied immediately.** When the balancer computes a lower (or zero) target for a charger, the `set_current` or `stop_charging` service is called on the very next power-meter event with no delay.
+
+**Current increases are subject to a configurable ramp-up cooldown** (`ramp_up_time_s`, default 30 s). After any dynamic reduction the balancer records the timestamp and holds increases until the cooldown has fully elapsed. This asymmetry deliberately prioritises grid safety: overloads must be resolved instantly, but premature ramp-back would cause rapid oscillation if the household load is fluctuating near the service limit.
+
+The cooldown is implemented in the pure function `apply_ramp_up_limit()` (`tests/test_load_balancer.py`) and is fully covered by unit tests. It will be ported into the custom integration.
+
+### Supply voltage as a Config Flow input
+
+The supply voltage (used to convert Watts ↔ Amps) is configured via the integration's Config Flow and stored in the config entry. It can be changed via the options flow without restarting HA. No `input_number` helper is required.
+
+### Ramp-up time as a Config Flow option
+
+`ramp_up_time_s` (default 30 s) is an options-flow setting stored in the config entry. Changing it triggers a coordinator reload but does not require a full HA restart. No `input_number` helper is required.
 
 ### Blueprint
 
-1. Define inputs (selectors) for all configurable parameters.
-2. Use `trigger: state` on power meter sensor.
-3. Use template conditions to compute available current and clamp.
-4. Call service dynamically using template service call.
+> **Note:** The automation blueprint was evaluated and rejected. See `2026-02-19-lessons-learned.md`.
 
 ---
 
@@ -209,8 +240,9 @@ Unit tests are **required** for any implementation (integration, AppDaemon app, 
 
 | Step | Owner | ETA | Deliverable |
 |------|-------|-----|-------------|
-| Discovery: confirm service payload & device-linking approach | alexisml | +0.5 days | Short note in docs/development/ |
-| AppDaemon prototype (single charger) | alexisml | +3 days | Working app + notes |
-| Evaluate prototype, choose delivery mechanism | alexisml | +4 days | Decision doc in docs/development/ |
-| Implement chosen approach (MVP) with unit tests | alexisml | +12 days | Code + tests + blueprint/integration |
+| Scaffold custom integration | alexisml | +2 days | `custom_components/ev_lb/` with Config Flow |
+| Register entities and device entry | alexisml | +4 days | Sensor, binary sensor, number, switch entities |
+| Port computation core + power-meter listener | alexisml | +6 days | Working integration (single charger) |
+| Multi-charger support via options flow | alexisml | +9 days | Add/remove chargers at runtime |
+| Integration tests (`pytest-homeassistant-custom-component`) | alexisml | +11 days | Full test suite |
 | HACS manifest, README, release | alexisml | +14 days | Publishable HACS repo |
