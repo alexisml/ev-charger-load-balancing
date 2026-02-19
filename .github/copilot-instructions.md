@@ -37,3 +37,11 @@ The integration lives in `custom_components/ev_lb/` and follows the standard Hom
 - `config_flow.py` — Config Flow UI
 - `const.py` — constants and defaults
 - `strings.json` + `translations/` — UI strings (English + Spanish)
+
+### Current limitations and future plans
+
+- **Single charger only:** The integration currently supports exactly one charger. Multi-charger support (water-filling fair distribution) is planned for PR-5/PR-6.
+- **Single instance only:** Only one config entry can be created (enforced by `async_set_unique_id`). Multiple instances are not supported.
+- **Future multi-charger approach:** Two options are under consideration — multiple config entries (one per power meter/site) or a single entry with an options flow to add/remove chargers. No decision has been made yet; do not implement either until it is scoped in the roadmap.
+
+When working on code, do not add multi-charger logic or remove the single-instance guard without an explicit PR milestone that scopes it.

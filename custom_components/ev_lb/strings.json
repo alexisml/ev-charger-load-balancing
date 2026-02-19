@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "EV Charger Load Balancing",
-        "description": "Configure the power meter and electrical service parameters for dynamic EV charger load balancing.",
+        "description": "Configure the power meter and electrical service parameters. This integration currently supports one charger. Multi-charger support is planned for a future release.",
         "data": {
           "power_meter_entity": "Power meter sensor",
           "voltage": "Supply voltage",

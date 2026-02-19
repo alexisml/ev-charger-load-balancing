@@ -40,8 +40,9 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Handle the initial step."""
-        # Prevent multiple instances — this integration manages all chargers
-        # from a single config entry (chargers are added via options flow).
+        # Single-instance protection: only one config entry is allowed.
+        # Multi-charger and multi-instance support are planned for a future PR
+        # (see docs/development/2026-02-19-research-plan.md, PR-5/PR-6).
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
 

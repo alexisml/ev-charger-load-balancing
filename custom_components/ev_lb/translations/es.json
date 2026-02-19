@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Balanceo de Carga para Cargadores de VE",
-        "description": "Configura el sensor de consumo eléctrico y los parámetros del servicio eléctrico para el balanceo dinámico de carga de cargadores de vehículos eléctricos.",
+        "description": "Configura el sensor de consumo eléctrico y los parámetros del servicio eléctrico. Esta integración actualmente soporta un solo cargador. El soporte para múltiples cargadores está planificado para una versión futura.",
         "data": {
           "power_meter_entity": "Sensor de consumo eléctrico",
           "voltage": "Voltaje de suministro",
