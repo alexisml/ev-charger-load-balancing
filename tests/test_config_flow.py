@@ -4,21 +4,20 @@ Tests cover:
 - Successful config entry creation with valid inputs
 - Validation error when the power meter entity does not exist
 - Default values for voltage and service current
+- Single-instance protection (abort if already configured)
 """
-
-from unittest.mock import patch
 
 import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.ev_lb.const import (
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
     CONF_VOLTAGE,
-    DEFAULT_MAX_SERVICE_CURRENT,
-    DEFAULT_VOLTAGE,
     DOMAIN,
 )
 
@@ -99,3 +98,23 @@ async def test_user_flow_custom_values(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_VOLTAGE] == 120.0
     assert result["data"][CONF_MAX_SERVICE_CURRENT] == 100.0
+
+
+async def test_user_flow_already_configured(hass: HomeAssistant) -> None:
+    """Test config flow aborts when integration is already configured."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_POWER_METER_ENTITY: "sensor.house_power_w",
+            CONF_VOLTAGE: 230.0,
+            CONF_MAX_SERVICE_CURRENT: 32.0,
+        },
+        unique_id=DOMAIN,
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"

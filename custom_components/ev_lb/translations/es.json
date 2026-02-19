@@ -18,6 +18,9 @@
     },
     "error": {
       "entity_not_found": "No se encontró la entidad del sensor de consumo eléctrico seleccionado."
+    },
+    "abort": {
+      "already_configured": "El Balanceo de Carga para Cargadores de VE ya está configurado."
     }
   }
 }

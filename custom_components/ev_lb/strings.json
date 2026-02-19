@@ -18,6 +18,9 @@
     },
     "error": {
       "entity_not_found": "The selected power meter entity was not found."
+    },
+    "abort": {
+      "already_configured": "EV Charger Load Balancing is already configured."
     }
   }
 }
