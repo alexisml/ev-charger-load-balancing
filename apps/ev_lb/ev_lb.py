@@ -9,7 +9,9 @@ Configuration (apps/ev_lb/ev_lb.yaml):
       module: ev_lb
       class: EVChargerLoadBalancer
       power_sensor: sensor.house_power_w       # required
-      voltage_v: 230                           # optional, default 230
+      voltage_v: 230                           # optional static fallback, default 230
+      voltage_input: input_number.ev_lb_voltage_v  # optional HA helper (takes precedence)
+      ramp_up_time_s: 30                       # optional, default 30 s
       max_service_current_input: input_number.ev_lb_max_service_current_a
       min_current_input: input_number.ev_lb_min_current_before_shutdown_a
       enabled_input: input_boolean.ev_lb_enabled
@@ -23,6 +25,7 @@ Configuration (apps/ev_lb/ev_lb.yaml):
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 try:
@@ -35,6 +38,7 @@ except ImportError:  # pragma: no cover
 VOLTAGE_DEFAULT: float = 230.0  # Volts
 MIN_CURRENT_DEFAULT: float = 6.0  # Amps (IEC 61851 minimum for AC charging)
 STEP_DEFAULT: float = 1.0  # Amps — resolution of current adjustments
+RAMP_UP_TIME_DEFAULT: float = 30.0  # Seconds — cooldown before increasing current
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +176,39 @@ def distribute_current(
     return allocations
 
 
+def apply_ramp_up_limit(
+    prev_a: float,
+    target_a: float,
+    last_reduction_time: Optional[float],
+    now: float,
+    ramp_up_time_s: float,
+) -> float:
+    """Prevent increasing current before the ramp-up cooldown has elapsed.
+
+    After a dynamic current reduction, the app waits *ramp_up_time_s* seconds
+    before allowing the target to rise again.  This avoids oscillation when
+    household load fluctuates around the service limit.
+
+    Args:
+        prev_a:             Current charging current in Amps (last set value).
+        target_a:           Newly computed target current in Amps.
+        last_reduction_time: Monotonic timestamp (seconds) when the current was
+                             last reduced for this charger, or ``None`` if there
+                             has been no reduction yet.
+        now:                Current monotonic timestamp in seconds.
+        ramp_up_time_s:     Cooldown period in seconds.
+
+    Returns:
+        *target_a* if the increase is permitted; *prev_a* if the cooldown has
+        not yet elapsed (hold at current level).
+    """
+    if target_a > prev_a and last_reduction_time is not None:
+        elapsed = now - last_reduction_time
+        if elapsed < ramp_up_time_s:
+            return prev_a
+    return target_a
+
+
 # ---------------------------------------------------------------------------
 # AppDaemon app
 # ---------------------------------------------------------------------------
@@ -184,6 +221,10 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
         def initialize(self) -> None:
             """Called by AppDaemon at startup to register listeners."""
             self._voltage_v: float = float(self.args.get("voltage_v", VOLTAGE_DEFAULT))
+            self._voltage_input: str = self.args.get("voltage_input", "")
+            self._ramp_up_time_s: float = float(
+                self.args.get("ramp_up_time_s", RAMP_UP_TIME_DEFAULT)
+            )
             self._power_sensor: str = self.args["power_sensor"]
             self._max_service_input: str = self.args["max_service_current_input"]
             self._min_current_input: str = self.args.get(
@@ -196,6 +237,8 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
 
             # Track the last requested current per charger (index → Amps)
             self._current_set: dict[int, float] = {}
+            # Track when each charger last had its current reduced (monotonic seconds)
+            self._last_reduction_time: dict[int, Optional[float]] = {}
 
             self.listen_state(self._on_power_change, self._power_sensor)
             self.log("EVChargerLoadBalancer initialised")
@@ -234,6 +277,7 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
             min_current_a = self._get_float_state(
                 self._min_current_input, default=MIN_CURRENT_DEFAULT
             )
+            voltage_v = self._get_voltage()
 
             charger_specs: list[tuple[float, float]] = []
             for idx, cfg in enumerate(self._charger_configs):
@@ -248,7 +292,7 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
                 house_power_w=house_power_w,
                 current_ev_a=current_ev_a,
                 max_service_a=max_service_a,
-                voltage_v=self._voltage_v,
+                voltage_v=voltage_v,
             )
 
             targets = distribute_current(
@@ -256,6 +300,7 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
                 chargers=charger_specs,
             )
 
+            now = time.monotonic()
             for idx, (cfg, target) in enumerate(zip(self._charger_configs, targets)):
                 charger_id = cfg["id"]
                 prev = self._current_set.get(idx)
@@ -266,12 +311,25 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
                     self._current_set[idx] = 0.0
                     self._set_active_sensor(charger_id, False)
                 else:
-                    was_stopped = prev is None or prev == 0.0
+                    # Apply ramp-up cooldown: don't increase too soon after a reduction
+                    prev_a = prev if prev is not None else 0.0
+                    effective_target = apply_ramp_up_limit(
+                        prev_a=prev_a,
+                        target_a=target,
+                        last_reduction_time=self._last_reduction_time.get(idx),
+                        now=now,
+                        ramp_up_time_s=self._ramp_up_time_s,
+                    )
+
+                    was_stopped = prev_a == 0.0
                     if was_stopped:
                         self._start_charging(cfg, charger_id)
-                    if target != prev:
-                        self._set_current(cfg, charger_id, target)
-                    self._current_set[idx] = target
+                    if effective_target != prev_a:
+                        # Record reduction timestamp before applying the change
+                        if effective_target < prev_a:
+                            self._last_reduction_time[idx] = now
+                        self._set_current(cfg, charger_id, effective_target)
+                    self._current_set[idx] = effective_target
                     self._set_active_sensor(charger_id, True)
 
                 self._set_current_sensor(charger_id, self._current_set[idx])
@@ -323,6 +381,12 @@ if _APPDAEMON_AVAILABLE:  # pragma: no cover
                 state=current_a,
                 attributes={"unit_of_measurement": "A", "device_class": "current"},
             )
+
+        def _get_voltage(self) -> float:
+            """Return voltage: reads from HA input_number if configured, else static value."""
+            if self._voltage_input:
+                return self._get_float_state(self._voltage_input, default=self._voltage_v)
+            return self._voltage_v
 
         def _is_enabled(self) -> bool:
             state = self.get_state(self._enabled_input)

@@ -5,6 +5,7 @@ Tests cover:
 - clamp_current: clamping to min/max, step flooring, returns None below min
 - distribute_current: single charger, multi-charger fairness, caps, shutoff,
   disabled state, power sensor unavailable, charger at zero load
+- apply_ramp_up_limit: cooldown enforcement, no-op when decreasing or no prior reduction
 """
 
 import sys
@@ -19,6 +20,7 @@ from ev_lb import (
     compute_available_current,
     clamp_current,
     distribute_current,
+    apply_ramp_up_limit,
 )
 
 
@@ -312,3 +314,97 @@ class TestPowerSensorUnavailable:
         )
         result = clamp_current(available, max_charger_a=32.0, min_charger_a=6.0)
         assert result == 32.0
+
+
+# ---------------------------------------------------------------------------
+# apply_ramp_up_limit
+# ---------------------------------------------------------------------------
+
+
+class TestApplyRampUpLimit:
+    """Tests for the ramp-up cooldown function."""
+
+    def test_increase_allowed_after_cooldown(self):
+        """Current can increase once ramp_up_time_s has elapsed."""
+        last_reduction = 1000.0
+        now = 1031.0  # 31 s later > 30 s cooldown
+        result = apply_ramp_up_limit(
+            prev_a=10.0,
+            target_a=16.0,
+            last_reduction_time=last_reduction,
+            now=now,
+            ramp_up_time_s=30.0,
+        )
+        assert result == 16.0
+
+    def test_increase_blocked_within_cooldown(self):
+        """Current is held at prev when cooldown has not elapsed."""
+        last_reduction = 1000.0
+        now = 1020.0  # only 20 s later < 30 s cooldown
+        result = apply_ramp_up_limit(
+            prev_a=10.0,
+            target_a=16.0,
+            last_reduction_time=last_reduction,
+            now=now,
+            ramp_up_time_s=30.0,
+        )
+        assert result == 10.0
+
+    def test_decrease_always_allowed(self):
+        """Decreasing current is never blocked by the cooldown."""
+        last_reduction = 1000.0
+        now = 1001.0  # only 1 s — well within cooldown
+        result = apply_ramp_up_limit(
+            prev_a=16.0,
+            target_a=10.0,
+            last_reduction_time=last_reduction,
+            now=now,
+            ramp_up_time_s=30.0,
+        )
+        assert result == 10.0
+
+    def test_no_prior_reduction_increase_allowed(self):
+        """Without a prior reduction timestamp any increase is allowed."""
+        result = apply_ramp_up_limit(
+            prev_a=10.0,
+            target_a=16.0,
+            last_reduction_time=None,
+            now=1000.0,
+            ramp_up_time_s=30.0,
+        )
+        assert result == 16.0
+
+    def test_same_target_as_prev(self):
+        """No change in target passes through unchanged."""
+        result = apply_ramp_up_limit(
+            prev_a=16.0,
+            target_a=16.0,
+            last_reduction_time=1000.0,
+            now=1005.0,
+            ramp_up_time_s=30.0,
+        )
+        assert result == 16.0
+
+    def test_exactly_at_cooldown_boundary(self):
+        """At exactly the cooldown duration the increase is allowed."""
+        last_reduction = 1000.0
+        now = 1030.0  # exactly 30 s elapsed
+        result = apply_ramp_up_limit(
+            prev_a=10.0,
+            target_a=16.0,
+            last_reduction_time=last_reduction,
+            now=now,
+            ramp_up_time_s=30.0,
+        )
+        assert result == 16.0
+
+    def test_zero_cooldown_always_allows_increase(self):
+        """A ramp_up_time_s of 0 never blocks an increase."""
+        result = apply_ramp_up_limit(
+            prev_a=10.0,
+            target_a=16.0,
+            last_reduction_time=1000.0,
+            now=1000.0,  # zero elapsed
+            ramp_up_time_s=0.0,
+        )
+        assert result == 16.0

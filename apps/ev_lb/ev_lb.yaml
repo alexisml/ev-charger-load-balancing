@@ -6,8 +6,19 @@ ev_charger_load_balancer:
   # Entity ID of the sensor reporting total household power (Watts).
   power_sensor: sensor.house_power_w
 
-  # Nominal supply voltage in Volts (default: 230).
+  # Nominal supply voltage in Volts (static fallback, default: 230).
+  # If voltage_input is also set, it takes precedence at runtime.
   voltage_v: 230
+
+  # Optional: HA input_number entity for supply voltage (Volts).
+  # Allows changing the voltage at runtime without restarting AppDaemon.
+  # When set, this takes precedence over voltage_v above.
+  voltage_input: input_number.ev_lb_voltage_v
+
+  # Ramp-up cooldown in seconds (default: 30).
+  # After a dynamic current reduction, the app waits this long before
+  # allowing current to increase again, preventing oscillation.
+  ramp_up_time_s: 30
 
   # --- Service limits (HA input_number helpers) ---
   # Whole-house breaker / service rating in Amps.
