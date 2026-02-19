@@ -45,3 +45,30 @@ The integration lives in `custom_components/ev_lb/` and follows the standard Hom
 - **Future multi-charger approach:** Two options are under consideration — multiple config entries (one per power meter/site) or a single entry with an options flow to add/remove chargers. No decision has been made yet; do not implement either until it is scoped in the roadmap.
 
 When working on code, do not add multi-charger logic or remove the single-instance guard without an explicit PR milestone that scopes it.
+
+### Code review rules
+
+Apply the following rules when reviewing or writing code in this repository.
+
+#### DRY (Don't Repeat Yourself)
+
+- Extract shared setup into fixtures or helper functions rather than duplicating identical blocks across tests.
+- Consolidate duplicate constants or magic values into `const.py` or module-level variables.
+- Shared test fixtures belong in `conftest.py` so they are available across all test modules.
+- **Exception:** Test *assertions and scenarios* do not need to be DRY — each test case should be independently readable without jumping to shared logic.
+
+#### Clean code
+
+- Every function and class must have a docstring that explains its purpose at the level of what the caller/user observes, not just what arguments it takes.
+- Remove dead code (commented-out blocks, unused imports, unreachable branches) before merging.
+- Keep functions focused: a function should do one thing and be small enough to understand at a glance.
+- Use named constants from `const.py` instead of inline magic numbers or strings.
+- Prefer explicit over implicit: avoid abbreviations that are not established in the domain (e.g., `available_a` is fine; `av` is not).
+
+#### User-oriented test descriptions
+
+- Every test docstring must describe the observable user or system behavior, not the internal implementation detail.
+  - ❌ `"Returns None when available is below charger minimum."` (describes a return value)
+  - ✅ `"Charging stops rather than operating at unsafe low current when headroom is insufficient."` (describes what the user observes)
+- Test class docstrings must state which user-facing scenario the class covers.
+- Test names must be self-explanatory: `test_charging_stops_when_overloaded` is preferred over `test_below_min_returns_none`.

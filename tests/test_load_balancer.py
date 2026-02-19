@@ -1,5 +1,9 @@
 """Unit tests for the EV charger load-balancing computation logic.
 
+Each test is written from the perspective of what the user observes:
+whether the charger receives more or less current, stops charging, or
+resumes after a cooldown.
+
 Tests cover:
 - compute_available_current: basic, edge cases, negative available
 - clamp_current: clamping to min/max, step flooring, returns None below min
@@ -95,32 +99,32 @@ class TestComputeAvailableCurrentBasic:
 
 class TestClampCurrent:
     def test_available_within_limits(self):
-        """Returns available current when it is between min and max."""
+        """Charger receives its target current when headroom is within safe operating limits."""
         result = clamp_current(available_a=20.0, max_charger_a=32.0, min_charger_a=6.0)
         assert result == 20.0
 
     def test_capped_at_max(self):
-        """Returns max when available exceeds charger maximum."""
+        """Charger is capped at its rated maximum even when more headroom is available."""
         result = clamp_current(available_a=40.0, max_charger_a=32.0, min_charger_a=6.0)
         assert result == 32.0
 
     def test_below_min_returns_none(self):
-        """Returns None when available is below charger minimum."""
+        """Charging stops rather than operating at unsafe low current when headroom is insufficient."""
         result = clamp_current(available_a=4.0, max_charger_a=32.0, min_charger_a=6.0)
         assert result is None
 
     def test_exactly_at_min(self):
-        """Returns min value when available equals min."""
+        """Charger continues charging at exactly the minimum safe current."""
         result = clamp_current(available_a=6.0, max_charger_a=32.0, min_charger_a=6.0)
         assert result == 6.0
 
     def test_exactly_at_max(self):
-        """Returns max when available equals max."""
+        """Charger charges at its rated maximum when headroom exactly matches it."""
         result = clamp_current(available_a=32.0, max_charger_a=32.0, min_charger_a=6.0)
         assert result == 32.0
 
     def test_step_flooring(self):
-        """Available current is floored to the nearest step."""
+        """Target current is rounded down to the nearest 1 A step to match typical charger resolution."""
         # 17.9 A floored to 1 A step → 17 A
         result = clamp_current(
             available_a=17.9, max_charger_a=32.0, min_charger_a=6.0, step_a=1.0
@@ -128,19 +132,19 @@ class TestClampCurrent:
         assert result == 17.0
 
     def test_custom_step(self):
-        """Respects a custom step size (e.g. 2 A)."""
+        """Target current is rounded down to a user-configured step size (e.g. 2 A for coarser chargers)."""
         result = clamp_current(
             available_a=15.0, max_charger_a=32.0, min_charger_a=6.0, step_a=2.0
         )
         assert result == 14.0
 
     def test_negative_available_returns_none(self):
-        """Negative available current always results in None."""
+        """Charging stops immediately when total household load already exceeds the service limit."""
         result = clamp_current(available_a=-5.0, max_charger_a=32.0, min_charger_a=6.0)
         assert result is None
 
     def test_zero_available_returns_none(self):
-        """Zero available current results in None when min > 0."""
+        """Charging stops when there is no current headroom remaining on the service limit."""
         result = clamp_current(available_a=0.0, max_charger_a=32.0, min_charger_a=6.0)
         assert result is None
 
@@ -152,27 +156,27 @@ class TestClampCurrent:
 
 class TestDistributeCurrentSingleCharger:
     def test_single_charger_gets_available(self):
-        """Single charger gets all available current (clamped to max)."""
+        """Single charger receives the full available current (up to its maximum)."""
         result = distribute_current(available_a=20.0, chargers=[(6.0, 32.0)])
         assert result == [20.0]
 
     def test_single_charger_capped_at_max(self):
-        """Single charger is capped at its maximum."""
+        """Single charger is capped at its rated maximum even when more headroom exists."""
         result = distribute_current(available_a=40.0, chargers=[(6.0, 32.0)])
         assert result == [32.0]
 
     def test_single_charger_below_min_returns_none(self):
-        """Single charger is stopped when available < min."""
+        """Charging stops when available headroom is below the charger's minimum operating current."""
         result = distribute_current(available_a=4.0, chargers=[(6.0, 32.0)])
         assert result == [None]
 
     def test_single_charger_exactly_min(self):
-        """Single charger gets exactly min current."""
+        """Charger continues charging at exactly the minimum when headroom matches it."""
         result = distribute_current(available_a=6.0, chargers=[(6.0, 32.0)])
         assert result == [6.0]
 
     def test_empty_charger_list(self):
-        """Empty charger list returns empty list."""
+        """No chargers configured returns an empty allocation list."""
         result = distribute_current(available_a=30.0, chargers=[])
         assert result == []
 
@@ -192,10 +196,10 @@ class TestDistributeCurrentMultiCharger:
         assert result[0] == 10.0
         assert result[1] == 18.0
 
-    def test_one_charger_below_min_other_gets_all(self):
-        """When one charger cannot meet min, the other gets all available."""
+    def test_both_chargers_stopped_when_fair_share_below_min(self):
+        """All chargers stop when the fair share falls below minimum for every charger."""
         # Available: 8 A; charger A min 6 A, charger B min 6 A
-        # Fair share = 4 A → both below min 6 A
+        # Fair share = 4 A → both below min 6 A → both stopped
         result = distribute_current(available_a=8.0, chargers=[(6.0, 32.0), (6.0, 32.0)])
         # Each fair share is 4 A < 6 A → both stopped
         assert result == [None, None]
@@ -241,7 +245,7 @@ class TestDistributeCurrentMultiCharger:
 
 class TestDistributeCurrentStepBehaviour:
     def test_step_applied_to_fair_share(self):
-        """Fair share is floored to step_a resolution."""
+        """Each charger's allocation is floored to the nearest 1 A step."""
         # Available: 25 A; 2 chargers; fair share = 12.5 A → floored to 12 A
         result = distribute_current(
             available_a=25.0,
@@ -251,7 +255,7 @@ class TestDistributeCurrentStepBehaviour:
         assert result == [12.0, 12.0]
 
     def test_custom_step_flooring(self):
-        """Custom step_a controls how current is floored."""
+        """Each charger's allocation is floored to the user-configured step size."""
         # Available: 25 A; 2 chargers; fair share = 12.5 A → floored to 12 A with 2 A step
         result = distribute_current(
             available_a=25.0,
@@ -271,7 +275,7 @@ class TestDisabledState:
     functions; but the computation layer itself is neutral to enable/disable."""
 
     def test_compute_still_works_when_lb_disabled(self):
-        """Computation functions are stateless and work regardless of enabled flag."""
+        """The computation layer is stateless; disabling load balancing is enforced by the caller, not here."""
         available = compute_available_current(
             house_power_w=3000.0,
             max_service_a=32.0,
@@ -292,7 +296,7 @@ class TestPowerSensorUnavailable:
     """
 
     def test_zero_house_power_with_no_ev(self):
-        """0 W house power → full service capacity available."""
+        """When the power sensor reads zero (e.g. unavailable), the full service capacity is offered to the charger."""
         available = compute_available_current(
             house_power_w=0.0,
             max_service_a=32.0,
@@ -310,7 +314,7 @@ class TestApplyRampUpLimit:
     """Tests for the ramp-up cooldown function."""
 
     def test_increase_allowed_after_cooldown(self):
-        """Current can increase once ramp_up_time_s has elapsed."""
+        """Charger current can increase once the ramp-up cooldown has fully elapsed."""
         last_reduction = 1000.0
         now = 1031.0  # 31 s later > 30 s cooldown
         result = apply_ramp_up_limit(
@@ -323,7 +327,7 @@ class TestApplyRampUpLimit:
         assert result == 16.0
 
     def test_increase_blocked_within_cooldown(self):
-        """Current is held at prev when cooldown has not elapsed."""
+        """Charger current is held at its previous value while the ramp-up cooldown is still running."""
         last_reduction = 1000.0
         now = 1020.0  # only 20 s later < 30 s cooldown
         result = apply_ramp_up_limit(
@@ -336,7 +340,7 @@ class TestApplyRampUpLimit:
         assert result == 10.0
 
     def test_decrease_always_allowed(self):
-        """Decreasing current is never blocked by the cooldown."""
+        """Current reductions are always applied immediately, regardless of the ramp-up cooldown."""
         last_reduction = 1000.0
         now = 1001.0  # only 1 s — well within cooldown
         result = apply_ramp_up_limit(
@@ -349,7 +353,7 @@ class TestApplyRampUpLimit:
         assert result == 10.0
 
     def test_no_prior_reduction_increase_allowed(self):
-        """Without a prior reduction timestamp any increase is allowed."""
+        """On first start (no prior reduction recorded) the charger current can increase freely."""
         result = apply_ramp_up_limit(
             prev_a=10.0,
             target_a=16.0,
@@ -360,7 +364,7 @@ class TestApplyRampUpLimit:
         assert result == 16.0
 
     def test_same_target_as_prev(self):
-        """No change in target passes through unchanged."""
+        """Holding at the same current level is always allowed (no change, no cooldown applies)."""
         result = apply_ramp_up_limit(
             prev_a=16.0,
             target_a=16.0,
@@ -371,7 +375,7 @@ class TestApplyRampUpLimit:
         assert result == 16.0
 
     def test_exactly_at_cooldown_boundary(self):
-        """At exactly the cooldown duration the increase is allowed."""
+        """Charger current is allowed to increase at exactly the cooldown boundary (boundary is inclusive)."""
         last_reduction = 1000.0
         now = 1030.0  # exactly 30 s elapsed
         result = apply_ramp_up_limit(
@@ -384,7 +388,7 @@ class TestApplyRampUpLimit:
         assert result == 16.0
 
     def test_zero_cooldown_always_allows_increase(self):
-        """A ramp_up_time_s of 0 never blocks an increase."""
+        """Setting ramp-up time to 0 disables the cooldown and allows instant current increases."""
         result = apply_ramp_up_limit(
             prev_a=10.0,
             target_a=16.0,
