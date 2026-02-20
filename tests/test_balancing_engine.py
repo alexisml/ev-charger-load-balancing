@@ -9,7 +9,7 @@ Tests cover:
 - Current increases are held during ramp-up cooldown
 - Load balancing respects the enabled/disabled switch
 - Unavailable/unknown power meter applies fallback based on configured behavior
-- Three unavailable modes: stop (default), ignore, set_current (capped at min of fallback and target)
+- Three unavailable modes: stop (default), ignore, set_current (capped at min of fallback and max charger current)
 - Non-numeric power meter values are ignored
 - Runtime changes to max charger current and min EV current trigger immediate recomputation
 - Re-enabling the switch triggers immediate recomputation
@@ -647,12 +647,12 @@ class TestUnavailableBehaviorIgnore:
 
 
 class TestUnavailableBehaviorSetCurrent:
-    """Verify 'set_current' mode applies min(fallback, current_target) when meter is unavailable."""
+    """Verify 'set_current' mode applies min(fallback, max_charger_current) when meter is unavailable."""
 
-    async def test_set_current_mode_caps_at_current_target(
+    async def test_set_current_mode_caps_at_max_charger_current(
         self, hass: HomeAssistant
     ) -> None:
-        """Fallback current is capped at the last known target when it is lower."""
+        """Fallback current is capped at max charger current when it is lower."""
         entry = MockConfigEntry(
             domain=DOMAIN,
             data={
@@ -660,7 +660,7 @@ class TestUnavailableBehaviorSetCurrent:
                 CONF_VOLTAGE: 230.0,
                 CONF_MAX_SERVICE_CURRENT: 32.0,
                 CONF_UNAVAILABLE_BEHAVIOR: UNAVAILABLE_BEHAVIOR_SET_CURRENT,
-                CONF_UNAVAILABLE_FALLBACK_CURRENT: 20.0,
+                CONF_UNAVAILABLE_FALLBACK_CURRENT: 50.0,
             },
             title="EV Load Balancing",
         )
@@ -676,10 +676,10 @@ class TestUnavailableBehaviorSetCurrent:
         await hass.async_block_till_done()
         assert float(hass.states.get(current_set_id).state) == 10.0
 
-        # Meter goes unavailable → fallback 20 A but capped at current 10 A
+        # Meter goes unavailable → fallback 50 A but capped at max_charger_current 32 A
         hass.states.async_set(POWER_METER, "unavailable")
         await hass.async_block_till_done()
-        assert float(hass.states.get(current_set_id).state) == 10.0
+        assert float(hass.states.get(current_set_id).state) == 32.0
 
     async def test_set_current_mode_uses_fallback_when_lower(
         self, hass: HomeAssistant

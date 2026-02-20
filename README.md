@@ -47,7 +47,7 @@ See [`docs/development-memories/2026-02-19-lessons-learned.md`](docs/development
 | **Min EV current** (A) | Lowest current at which the charger can operate (IEC 61851: 6 A); below this charging must stop |
 | **Ramp-up time** (s) | Cooldown before allowing current to increase after a dynamic reduction (default 30 s) |
 | **Unavailable behavior** | What to do when the power meter is unavailable: **stop** (default), **ignore**, or **set current** |
-| **Fallback current** (A) | Charging current to use in "set current" mode — capped at min(configured, current target) to prevent unsafe increases |
+| **Fallback current** (A) | Charging current to use in "set current" mode — capped at the charger maximum to prevent exceeding the physical limit |
 | **Actions** | User-supplied scripts: `set_current`, `stop_charging`, `start_charging` |
 
 ---
@@ -160,7 +160,7 @@ When the power meter entity transitions to `unavailable` or `unknown`, the coord
 |---|---|
 | **Stop charging** (default) | Charger is immediately set to 0 A — safest option when meter data is unreliable. |
 | **Ignore** | Do nothing — keep the last computed charger current. Useful if brief meter dropouts are common and you don't want to interrupt charging. |
-| **Set a specific current** | Apply the configured fallback current, **capped at the minimum of the fallback value and the current target**. This ensures the charger never increases beyond what was last known to be safe. For example: if the target was 10 A and the fallback is 20 A, the charger stays at 10 A; if the target was 18 A and the fallback is 6 A, the charger drops to 6 A. |
+| **Set a specific current** | Apply the configured fallback current, **capped at the charger maximum**. This ensures the fallback never exceeds the physical charger limit. For example: if max charger current is 32 A and the fallback is 50 A, the charger is set to 32 A; if the fallback is 6 A, the charger drops to 6 A. |
 
 When the meter recovers and starts reporting valid values again, normal computation resumes automatically on the next state change.
 

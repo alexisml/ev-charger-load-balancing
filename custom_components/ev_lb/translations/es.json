@@ -15,8 +15,8 @@
           "power_meter_entity": "Entidad de sensor que reporta el consumo eléctrico total del hogar en Watts.",
           "voltage": "Voltaje nominal de suministro en Volts (usado para convertir W ↔ A).",
           "max_service_current": "Capacidad del interruptor principal en Amperes. La carga nunca excederá este límite.",
-          "unavailable_behavior": "Qué hacer cuando el medidor de consumo no está disponible: detener la carga (más seguro), ignorar y mantener el último valor, o establecer una corriente específica (limitada al último objetivo seguro conocido).",
-          "unavailable_fallback_current": "Corriente de carga (A) a usar cuando el medidor no está disponible y el modo es 'Establecer una corriente específica'. Este valor se limitará al último objetivo seguro conocido para evitar aumentos inseguros."
+          "unavailable_behavior": "Qué hacer cuando el medidor de consumo no está disponible: detener la carga (más seguro), ignorar y mantener el último valor, o establecer una corriente específica (limitada a la corriente máxima del cargador).",
+          "unavailable_fallback_current": "Corriente de carga (A) a usar cuando el medidor no está disponible y el modo es 'Establecer una corriente específica'. Este valor se limitará a la corriente máxima del cargador."
         }
       }
     },

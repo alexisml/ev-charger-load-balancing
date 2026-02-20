@@ -176,8 +176,7 @@ class EvLoadBalancerCoordinator:
         * **ignore** — do nothing; keep the last computed values.
         * **stop** — set charger current to 0 A (safest).
         * **set_current** — apply the configured fallback current, capped
-          at the minimum of that value and the current target so the
-          charger never increases beyond what was last known to be safe.
+          at the charger maximum so it never exceeds the physical limit.
         """
         behavior = self._unavailable_behavior
 
@@ -190,15 +189,16 @@ class EvLoadBalancerCoordinator:
             return
 
         if behavior == UNAVAILABLE_BEHAVIOR_SET_CURRENT:
-            # Never increase beyond what was last computed as safe.
-            fallback = min(self._unavailable_fallback_a, self.current_set_a)
+            # Cap at the charger maximum so the fallback never exceeds the
+            # physical charger limit, even if the configured value is higher.
+            fallback = min(self._unavailable_fallback_a, self.max_charger_current)
             _LOGGER.warning(
                 "Power meter %s is unavailable — applying fallback current %.1f A "
-                "(configured %.1f A, capped to current target %.1f A)",
+                "(configured %.1f A, capped to max charger current %.1f A)",
                 self._power_meter_entity,
                 fallback,
                 self._unavailable_fallback_a,
-                self.current_set_a,
+                self.max_charger_current,
             )
         else:
             # Default: stop charging

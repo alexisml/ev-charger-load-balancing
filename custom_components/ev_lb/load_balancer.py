@@ -76,6 +76,87 @@ def clamp_current(
     return target
 
 
+def _classify_chargers(
+    active: list[int],
+    chargers: list[tuple[float, float]],
+    fair_share: float,
+    step_a: float,
+) -> tuple[list[int], list[int]]:
+    """Split active charger indices into capped and below-minimum groups.
+
+    Args:
+        active:     Indices of chargers still competing for current.
+        chargers:   ``(min_a, max_a)`` tuples for every charger.
+        fair_share: Equal share of remaining current per active charger.
+        step_a:     Current resolution in Amps.
+
+    Returns:
+        ``(capped, below_min)`` — indices of chargers that hit their
+        maximum or fell below their minimum, respectively.
+    """
+    capped: list[int] = []
+    below_min: list[int] = []
+
+    for i in active:
+        min_a, max_a = chargers[i]
+        max_floored = (max_a // step_a) * step_a
+        target = (min(fair_share, max_a) // step_a) * step_a
+
+        if target >= max_floored:
+            capped.append(i)
+        elif target < min_a:
+            below_min.append(i)
+
+    return capped, below_min
+
+
+def _assign_final_shares(
+    active: list[int],
+    chargers: list[tuple[float, float]],
+    fair_share: float,
+    step_a: float,
+    allocations: list[Optional[float]],
+) -> None:
+    """Assign the final fair share to each remaining active charger in-place.
+
+    Called when no charger needs capping or removal — the iteration is done.
+    """
+    for i in active:
+        min_a, _ = chargers[i]
+        target = (fair_share // step_a) * step_a
+        allocations[i] = target if target >= min_a else None
+
+
+def _settle_capped_and_below_min(
+    capped: list[int],
+    below_min: list[int],
+    chargers: list[tuple[float, float]],
+    step_a: float,
+    active: list[int],
+    allocations: list[Optional[float]],
+    remaining: float,
+) -> float:
+    """Allocate capped chargers at their max and remove below-minimum chargers.
+
+    Returns the updated remaining current after subtracting capped allocations.
+    """
+    for i in capped:
+        max_floored = (chargers[i][1] // step_a) * step_a
+        min_a = chargers[i][0]
+        if max_floored >= min_a:
+            allocations[i] = max_floored
+            remaining -= max_floored
+        else:
+            allocations[i] = None
+        active.remove(i)
+
+    for i in below_min:
+        allocations[i] = None
+        active.remove(i)
+
+    return remaining
+
+
 def distribute_current(
     available_a: float,
     chargers: list[tuple[float, float]],
@@ -111,39 +192,19 @@ def distribute_current(
 
     while active:
         fair_share = remaining / len(active)
-        capped: list[int] = []
-        below_min: list[int] = []
-
-        for i in active:
-            min_a, max_a = chargers[i]
-            max_floored = (max_a // step_a) * step_a
-            target = (min(fair_share, max_a) // step_a) * step_a
-
-            if target >= max_floored:
-                capped.append(i)
-            elif target < min_a:
-                below_min.append(i)
+        capped, below_min = _classify_chargers(
+            active, chargers, fair_share, step_a
+        )
 
         if not capped and not below_min:
-            for i in active:
-                min_a, _ = chargers[i]
-                target = (fair_share // step_a) * step_a
-                allocations[i] = target if target >= min_a else None
+            _assign_final_shares(
+                active, chargers, fair_share, step_a, allocations
+            )
             break
 
-        for i in capped:
-            max_floored = (chargers[i][1] // step_a) * step_a
-            min_a = chargers[i][0]
-            if max_floored >= min_a:
-                allocations[i] = max_floored
-                remaining -= max_floored
-            else:
-                allocations[i] = None
-            active.remove(i)
-
-        for i in below_min:
-            allocations[i] = None
-            active.remove(i)
+        remaining = _settle_capped_and_below_min(
+            capped, below_min, chargers, step_a, active, allocations, remaining
+        )
 
     return allocations
 
