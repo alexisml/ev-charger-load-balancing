@@ -8,7 +8,7 @@ Summary: Records design decisions, implementation details, and lessons learned f
 
 ## Context
 
-PR-3 implements the single-charger balancing engine as described in the MVP plan (`docs/documentation/milestones/01-2026-02-19-mvp-plan.md`). The goal was to port the pure computation functions from `tests/load_balancer_core.py` into `custom_components/ev_lb/load_balancer.py` and wire them to HA state changes via a coordinator.
+PR-3 implements the single-charger balancing engine as described in the MVP plan (`docs/documentation/milestones/01-2026-02-19-mvp-plan.md`). The goal was to port the pure computation functions from the legacy `tests/load_balancer_core.py` helper into `custom_components/ev_lb/load_balancer.py` and wire them to HA state changes via a coordinator; as part of this refactor, the obsolete test helper file was removed and the stale reference in `tests/conftest.py` was cleaned up in line with the “no dead code before merging” guideline.
 
 ## What was built
 
