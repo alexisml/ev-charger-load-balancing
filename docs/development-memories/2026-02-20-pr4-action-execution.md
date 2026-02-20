@@ -43,9 +43,9 @@ A new `_update_and_notify` method consolidates state updates, action scheduling,
 
 ### Payload format
 
-- `set_current` receives: `{"entity_id": "<script_entity>", "variables": {"current_a": <float>}}`
-- `stop_charging` receives: `{"entity_id": "<script_entity>"}` (no variables)
-- `start_charging` receives: `{"entity_id": "<script_entity>"}` (no variables)
+- `set_current` receives: `{"entity_id": "<script_entity>", "variables": {"current_a": <float>, "charger_id": "<entry_id>"}}`
+- `stop_charging` receives: `{"entity_id": "<script_entity>", "variables": {"charger_id": "<entry_id>"}}`
+- `start_charging` receives: `{"entity_id": "<script_entity>", "variables": {"charger_id": "<entry_id>"}}`
 
 Scripts are called via `hass.services.async_call("script", "turn_on", ...)` with `blocking=True`.
 
@@ -54,24 +54,27 @@ Scripts are called via `hass.services.async_call("script", "turn_on", ...)` with
 1. **All actions optional.** Making all three actions optional preserves backward compatibility and allows the integration to work in "compute-only" mode (displaying sensor values without charger control). This avoids the need for config entry migration.
 2. **Script entity selector.** Using `EntitySelector(domain="script")` gives the user a dropdown of existing scripts in the HA UI, which is more discoverable than a free-text field.
 3. **Ordered execution via single coroutine.** The `_execute_actions` method is a single async coroutine that awaits each action in order. This ensures `start_charging` completes before `set_current` during resume transitions.
-4. **No charger_id in payload.** The MVP is single-charger only. The `charger_id` variable will be added in Phase 2 when multi-charger support is implemented.
+4. **`charger_id` in all payloads.** Every action receives a `charger_id` variable (the config entry ID) so scripts can address the correct charger. This prepares for Phase 2 multi-charger support.
 5. **Action scheduling via `async_create_task`.** Since the coordinator's `_update_and_notify` runs from a synchronous `@callback` context, async service calls are scheduled as a task. After `await hass.async_block_till_done()` in tests, the task completes.
+6. **Options flow for post-setup changes.** Users can add, change, or remove action scripts at any time via Settings → Integrations → Configure. The integration reloads automatically when options change.
+7. **Script entities over inline actions.** HA's `ActionSelector` could allow inline action sequences, but script entities were chosen because: they provide a familiar UI-driven creation flow, support multi-step sequences, and are reusable across automations. Direct inline action support may be added in a future version.
 
 ## Test coverage
 
-10 integration tests in `test_action_execution.py` covering:
-- `set_current` fires with correct payload on initial charge (resume)
+11 integration tests in `test_action_execution.py` covering:
+- `set_current` fires with correct payload (current_a + charger_id) on initial charge (resume)
 - `set_current` fires on current adjustment while already active
-- Payload contains `current_a` as a float value
-- `stop_charging` fires when headroom drops below minimum (overload)
+- Payload contains `current_a` as a float and `charger_id` as a string
+- `stop_charging` fires with charger_id when headroom drops below minimum (overload)
 - `stop_charging` fires when meter becomes unavailable in stop mode
 - `start_charging` + `set_current` fire in correct order on resume
 - No actions fire when current is unchanged
 - No actions fire when charger is already stopped and stays stopped
 - No actions fire when action scripts are not configured (backward compat)
 - Failed action script logs warning but integration continues operating
+- Options flow allows updating action scripts after initial setup
 
-All 91 tests pass (81 existing + 10 new).
+All 92 tests pass (81 existing + 11 new).
 
 ## Lessons learned
 
@@ -89,3 +92,4 @@ All 91 tests pass (81 existing + 10 new).
 ## Changelog
 
 - 2026-02-20: Initial version (PR-4 implementation complete).
+- 2026-02-20: Added `charger_id` to all action payloads, options flow for post-setup action changes, comprehensive usage documentation (`docs/documentation/action-scripts-guide.md`).

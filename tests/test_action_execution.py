@@ -1,15 +1,16 @@
 """Tests for the action execution contract (PR-4).
 
 Tests cover:
-- set_current action fires with correct payload when charger current changes
-- stop_charging action fires when headroom drops below minimum
-- start_charging + set_current fire in order when charging resumes
+- set_current action fires with correct payload (current_a + charger_id) when charger current changes
+- stop_charging action fires with charger_id when headroom drops below minimum
+- start_charging + set_current fire in order when charging resumes, both with charger_id
 - No actions fire when no state transition occurs
 - No actions fire when action scripts are not configured
 - Error handling: a failing action script logs a warning but does not break the integration
-- Payload validation: set_current receives current_a as a float
+- Payload validation: set_current receives current_a as a float and charger_id as a string
 - Fallback-to-stop triggers stop_charging action
 - Meter recovery triggers start_charging + set_current when resuming from stop
+- Options flow allows changing action scripts after initial setup
 """
 
 import pytest
@@ -117,11 +118,15 @@ class TestSetCurrentAction:
         hass.states.async_set(POWER_METER, "5000")
         await hass.async_block_till_done()
 
+        entry_id = mock_config_entry_with_actions.entry_id
+
         # Should fire start_charging then set_current (resume transition)
         assert len(calls) == 2
         assert calls[0].data["entity_id"] == START_CHARGING_SCRIPT
+        assert calls[0].data["variables"]["charger_id"] == entry_id
         assert calls[1].data["entity_id"] == SET_CURRENT_SCRIPT
         assert calls[1].data["variables"]["current_a"] == 10.0
+        assert calls[1].data["variables"]["charger_id"] == entry_id
 
     async def test_set_current_fires_on_current_adjustment(
         self,
@@ -146,13 +151,14 @@ class TestSetCurrentAction:
         assert len(calls) == 1
         assert calls[0].data["entity_id"] == SET_CURRENT_SCRIPT
         assert calls[0].data["variables"]["current_a"] == 15.0
+        assert calls[0].data["variables"]["charger_id"] == mock_config_entry_with_actions.entry_id
 
     async def test_set_current_payload_contains_current_a_as_float(
         self,
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """The set_current payload includes current_a as a float value."""
+        """The set_current payload includes current_a as a float and charger_id as a string."""
         calls = async_mock_service(hass, "script", "turn_on")
         await _setup(hass, mock_config_entry_with_actions)
 
@@ -163,9 +169,11 @@ class TestSetCurrentAction:
             c for c in calls if c.data["entity_id"] == SET_CURRENT_SCRIPT
         ]
         assert len(set_current_calls) == 1
-        current_a = set_current_calls[0].data["variables"]["current_a"]
-        assert isinstance(current_a, float)
-        assert current_a > 0
+        variables = set_current_calls[0].data["variables"]
+        assert isinstance(variables["current_a"], float)
+        assert variables["current_a"] > 0
+        assert isinstance(variables["charger_id"], str)
+        assert variables["charger_id"] == mock_config_entry_with_actions.entry_id
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +208,9 @@ class TestStopChargingAction:
             c for c in calls if c.data["entity_id"] == STOP_CHARGING_SCRIPT
         ]
         assert len(stop_calls) == 1
-        # stop_charging should not have variables
-        assert "variables" not in stop_calls[0].data
+        # stop_charging receives charger_id but no current_a
+        assert stop_calls[0].data["variables"]["charger_id"] == mock_config_entry_with_actions.entry_id
+        assert "current_a" not in stop_calls[0].data["variables"]
 
     async def test_stop_fires_when_meter_unavailable_in_stop_mode(
         self,
@@ -388,3 +397,44 @@ class TestActionErrorHandling:
 
         # Warning should be logged about failed action
         assert "failed" in caplog.text.lower() or "Action" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Options flow — modify actions after setup
+# ---------------------------------------------------------------------------
+
+
+class TestOptionsFlow:
+    """Verify action scripts can be changed after initial setup via options flow."""
+
+    async def test_options_flow_updates_action_scripts(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_no_actions: MockConfigEntry,
+    ) -> None:
+        """Actions configured via options flow are used on next reload."""
+        await _setup(hass, mock_config_entry_no_actions)
+
+        # Open options flow
+        result = await hass.config_entries.options.async_init(
+            mock_config_entry_no_actions.entry_id,
+        )
+        assert result["type"] == "form"
+        assert result["step_id"] == "init"
+
+        # Submit new action scripts
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_ACTION_SET_CURRENT: SET_CURRENT_SCRIPT,
+                CONF_ACTION_STOP_CHARGING: STOP_CHARGING_SCRIPT,
+                CONF_ACTION_START_CHARGING: START_CHARGING_SCRIPT,
+            },
+        )
+        assert result["type"] == "create_entry"
+
+        # Verify options are stored
+        options = mock_config_entry_no_actions.options
+        assert options[CONF_ACTION_SET_CURRENT] == SET_CURRENT_SCRIPT
+        assert options[CONF_ACTION_STOP_CHARGING] == STOP_CHARGING_SCRIPT
+        assert options[CONF_ACTION_START_CHARGING] == START_CHARGING_SCRIPT

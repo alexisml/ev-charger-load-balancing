@@ -71,15 +71,19 @@ class EvLoadBalancerCoordinator:
             DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
         )
 
-        # Action script entity IDs (None when not configured)
-        self._action_set_current: str | None = entry.data.get(
+        # Action script entity IDs (None when not configured).
+        # Prefer options over data so changes via options flow take effect.
+        self._action_set_current: str | None = entry.options.get(
             CONF_ACTION_SET_CURRENT,
+            entry.data.get(CONF_ACTION_SET_CURRENT),
         )
-        self._action_stop_charging: str | None = entry.data.get(
+        self._action_stop_charging: str | None = entry.options.get(
             CONF_ACTION_STOP_CHARGING,
+            entry.data.get(CONF_ACTION_STOP_CHARGING),
         )
-        self._action_start_charging: str | None = entry.data.get(
+        self._action_start_charging: str | None = entry.options.get(
             CONF_ACTION_START_CHARGING,
+            entry.data.get(CONF_ACTION_START_CHARGING),
         )
 
         # Runtime parameters (updated by number/switch entities)
@@ -318,30 +322,40 @@ class EvLoadBalancerCoordinator:
         - **Stop** (was active, now stopped): call stop_charging.
         - **Adjust** (was active, still active, current changed): call set_current.
         - **No change**: no action is executed.
+
+        Every action receives a ``charger_id`` variable (the config entry ID)
+        so scripts can address the correct charger.
         """
         new_active = self.active
         new_current = self.current_set_a
+        charger_id = self.entry.entry_id
 
         if new_active and not prev_active:
             # Resume: start charging, then set the target current
             await self._call_action(
-                self._action_start_charging, "start_charging"
+                self._action_start_charging,
+                "start_charging",
+                charger_id=charger_id,
             )
             await self._call_action(
                 self._action_set_current,
                 "set_current",
+                charger_id=charger_id,
                 current_a=new_current,
             )
         elif not new_active and prev_active:
             # Stop charging
             await self._call_action(
-                self._action_stop_charging, "stop_charging"
+                self._action_stop_charging,
+                "stop_charging",
+                charger_id=charger_id,
             )
         elif new_active and new_current != prev_current:
             # Current changed while active — adjust
             await self._call_action(
                 self._action_set_current,
                 "set_current",
+                charger_id=charger_id,
                 current_a=new_current,
             )
 
@@ -349,7 +363,7 @@ class EvLoadBalancerCoordinator:
         self,
         entity_id: str | None,
         action_name: str,
-        **variables: float,
+        **variables: float | str,
     ) -> None:
         """Call a configured action script with the given variables.
 

@@ -6,7 +6,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow
+from homeassistant.config_entries import ConfigFlow, OptionsFlow
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import (
     EntitySelector,
@@ -49,6 +49,13 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for EV Charger Load Balancing."""
 
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(
+        config_entry,
+    ) -> EvLbOptionsFlow:
+        """Return the options flow handler."""
+        return EvLbOptionsFlow(config_entry)
 
     async def async_step_user(
         self,
@@ -156,4 +163,61 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=data_schema,
             errors=errors,
+        )
+
+
+class EvLbOptionsFlow(OptionsFlow):
+    """Handle options flow for EV Charger Load Balancing.
+
+    Allows users to add, change, or remove action scripts after initial
+    setup without needing to delete and re-create the config entry.
+    """
+
+    def __init__(self, config_entry) -> None:
+        """Initialise the options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Handle the options flow step."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        # Pre-fill with current values (options take priority, then data)
+        current = {**self.config_entry.data, **self.config_entry.options}
+
+        data_schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_ACTION_SET_CURRENT,
+                    description={
+                        "suggested_value": current.get(CONF_ACTION_SET_CURRENT),
+                    },
+                ): EntitySelector(
+                    EntitySelectorConfig(domain="script"),
+                ),
+                vol.Optional(
+                    CONF_ACTION_STOP_CHARGING,
+                    description={
+                        "suggested_value": current.get(CONF_ACTION_STOP_CHARGING),
+                    },
+                ): EntitySelector(
+                    EntitySelectorConfig(domain="script"),
+                ),
+                vol.Optional(
+                    CONF_ACTION_START_CHARGING,
+                    description={
+                        "suggested_value": current.get(CONF_ACTION_START_CHARGING),
+                    },
+                ): EntitySelector(
+                    EntitySelectorConfig(domain="script"),
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=data_schema,
         )

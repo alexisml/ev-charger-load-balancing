@@ -49,7 +49,7 @@ See [`docs/development-memories/2026-02-19-lessons-learned.md`](docs/development
 | **Ramp-up time** (s) | Cooldown before allowing current to increase after a dynamic reduction (default 30 s) |
 | **Unavailable behavior** | What to do when the power meter is unavailable: **stop** (default), **ignore**, or **set current** |
 | **Fallback current** (A) | Charging current to use in "set current" mode — capped at the charger maximum to prevent exceeding the physical limit |
-| **Actions** | User-supplied scripts: `set_current`, `stop_charging`, `start_charging` |
+| **Actions** | User-supplied scripts: `set_current`, `stop_charging`, `start_charging` — see the [Action Scripts Guide](docs/documentation/action-scripts-guide.md) |
 
 ---
 
