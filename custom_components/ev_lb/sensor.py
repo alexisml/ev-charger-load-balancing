@@ -120,7 +120,7 @@ class EvLbLastActionReasonSensor(RestoreSensor):
     _attr_has_entity_name = True
     _attr_translation_key = "last_action_reason"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_native_value = ""
+    _attr_native_value = None
 
     def __init__(
         self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
