@@ -4,6 +4,10 @@ Subscribes to the configured power-meter entity and, on every state
 change, recomputes the target charging current using the pure functions
 in :mod:`load_balancer`.  Entity state is updated via the HA dispatcher
 so sensor/binary-sensor platforms can refresh without tight coupling.
+
+When action scripts are configured, the coordinator executes the
+appropriate charger commands (set_current, stop_charging, start_charging)
+on every state transition.
 """
 
 from __future__ import annotations
@@ -13,10 +17,14 @@ import time
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import (
+    CONF_ACTION_SET_CURRENT,
+    CONF_ACTION_START_CHARGING,
+    CONF_ACTION_STOP_CHARGING,
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
     CONF_UNAVAILABLE_BEHAVIOR,
@@ -61,6 +69,17 @@ class EvLoadBalancerCoordinator:
         self._unavailable_fallback_a: float = entry.data.get(
             CONF_UNAVAILABLE_FALLBACK_CURRENT,
             DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
+        )
+
+        # Action script entity IDs (None when not configured)
+        self._action_set_current: str | None = entry.data.get(
+            CONF_ACTION_SET_CURRENT,
+        )
+        self._action_stop_charging: str | None = entry.data.get(
+            CONF_ACTION_STOP_CHARGING,
+        )
+        self._action_start_charging: str | None = entry.data.get(
+            CONF_ACTION_START_CHARGING,
         )
 
         # Runtime parameters (updated by number/switch entities)
@@ -210,11 +229,7 @@ class EvLoadBalancerCoordinator:
 
         # Without a valid meter reading, headroom is unknown — report 0 A
         # as available and apply the determined fallback for the charger.
-        self.available_current_a = 0.0
-        self.current_set_a = fallback
-        self.active = fallback > 0
-
-        async_dispatcher_send(self.hass, self.signal_update)
+        self._update_and_notify(0.0, fallback)
 
     # ------------------------------------------------------------------
     # Core computation
@@ -253,10 +268,119 @@ class EvLoadBalancerCoordinator:
         if final_a < self.current_set_a:
             self._last_reduction_time = now
 
-        # Update computed state
-        self.available_current_a = round(available_a, 2)
-        self.current_set_a = final_a
-        self.active = final_a > 0
+        # Update computed state and execute actions
+        self._update_and_notify(round(available_a, 2), final_a)
 
-        # Notify entities
+    # ------------------------------------------------------------------
+    # State update, action execution, and entity notification
+    # ------------------------------------------------------------------
+
+    def _update_and_notify(
+        self, available_a: float, current_a: float
+    ) -> None:
+        """Update state, fire charger actions for transitions, and notify entities.
+
+        Captures the previous state, applies the new values, schedules any
+        required charger action calls, and sends the HA dispatcher signal
+        so entity platforms can refresh.
+        """
+        prev_active = self.active
+        prev_current = self.current_set_a
+
+        self.available_current_a = available_a
+        self.current_set_a = current_a
+        self.active = current_a > 0
+
+        # Schedule charger action execution for state transitions
+        if self._has_actions():
+            self.hass.async_create_task(
+                self._execute_actions(prev_active, prev_current),
+                eager_start=False,
+            )
+
         async_dispatcher_send(self.hass, self.signal_update)
+
+    def _has_actions(self) -> bool:
+        """Return True if any charger action script is configured."""
+        return bool(
+            self._action_set_current
+            or self._action_stop_charging
+            or self._action_start_charging
+        )
+
+    async def _execute_actions(
+        self, prev_active: bool, prev_current: float
+    ) -> None:
+        """Execute the appropriate charger action(s) based on state transitions.
+
+        Transition rules:
+        - **Resume** (was stopped, now active): call start_charging then set_current.
+        - **Stop** (was active, now stopped): call stop_charging.
+        - **Adjust** (was active, still active, current changed): call set_current.
+        - **No change**: no action is executed.
+        """
+        new_active = self.active
+        new_current = self.current_set_a
+
+        if new_active and not prev_active:
+            # Resume: start charging, then set the target current
+            await self._call_action(
+                self._action_start_charging, "start_charging"
+            )
+            await self._call_action(
+                self._action_set_current,
+                "set_current",
+                current_a=new_current,
+            )
+        elif not new_active and prev_active:
+            # Stop charging
+            await self._call_action(
+                self._action_stop_charging, "stop_charging"
+            )
+        elif new_active and new_current != prev_current:
+            # Current changed while active — adjust
+            await self._call_action(
+                self._action_set_current,
+                "set_current",
+                current_a=new_current,
+            )
+
+    async def _call_action(
+        self,
+        entity_id: str | None,
+        action_name: str,
+        **variables: float,
+    ) -> None:
+        """Call a configured action script with the given variables.
+
+        Silently skips when the action is not configured.  Logs a warning
+        and continues when the service call fails so that a single broken
+        script does not prevent the remaining actions from executing.
+        """
+        if not entity_id:
+            return
+
+        service_data: dict = {"entity_id": entity_id}
+        if variables:
+            service_data["variables"] = variables
+
+        try:
+            await self.hass.services.async_call(
+                "script",
+                "turn_on",
+                service_data,
+                blocking=True,
+            )
+            _LOGGER.debug(
+                "Action %s executed via %s (variables=%s)",
+                action_name,
+                entity_id,
+                variables or {},
+            )
+        except HomeAssistantError as exc:
+            _LOGGER.warning(
+                "Action %s failed via %s: %s",
+                action_name,
+                entity_id,
+                exc,
+            )

@@ -9,14 +9,20 @@
           "voltage": "Voltaje de suministro",
           "max_service_current": "Corriente máxima del servicio (capacidad del interruptor)",
           "unavailable_behavior": "Cuando el medidor no está disponible",
-          "unavailable_fallback_current": "Corriente de respaldo (para modo 'Establecer una corriente específica')"
+          "unavailable_fallback_current": "Corriente de respaldo (para modo 'Establecer una corriente específica')",
+          "action_set_current": "Acción para establecer corriente (script)",
+          "action_stop_charging": "Acción para detener carga (script)",
+          "action_start_charging": "Acción para iniciar carga (script)"
         },
         "data_description": {
           "power_meter_entity": "Entidad de sensor que reporta el consumo eléctrico total del hogar en Watts.",
           "voltage": "Voltaje nominal de suministro en Volts (usado para convertir W ↔ A).",
           "max_service_current": "Capacidad del interruptor principal en Amperes. La carga nunca excederá este límite.",
           "unavailable_behavior": "Qué hacer cuando el medidor de consumo no está disponible: detener la carga (más seguro), ignorar y mantener el último valor, o establecer una corriente específica (limitada a la corriente máxima del cargador).",
-          "unavailable_fallback_current": "Corriente de carga (A) a usar cuando el medidor no está disponible y el modo es 'Establecer una corriente específica'. Este valor se limitará a la corriente máxima del cargador."
+          "unavailable_fallback_current": "Corriente de carga (A) a usar cuando el medidor no está disponible y el modo es 'Establecer una corriente específica'. Este valor se limitará a la corriente máxima del cargador.",
+          "action_set_current": "Entidad de script para establecer la corriente de carga. Recibe una variable 'current_a' con los Amperes objetivo.",
+          "action_stop_charging": "Entidad de script para detener la carga cuando no hay suficiente capacidad disponible.",
+          "action_start_charging": "Entidad de script para iniciar/reanudar la carga después de haber sido detenida."
         }
       }
     },

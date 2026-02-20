@@ -21,6 +21,9 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_ACTION_SET_CURRENT,
+    CONF_ACTION_START_CHARGING,
+    CONF_ACTION_STOP_CHARGING,
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
     CONF_UNAVAILABLE_BEHAVIOR,
@@ -136,6 +139,15 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):
                         unit_of_measurement="A",
                         mode=NumberSelectorMode.BOX,
                     ),
+                ),
+                vol.Optional(CONF_ACTION_SET_CURRENT): EntitySelector(
+                    EntitySelectorConfig(domain="script"),
+                ),
+                vol.Optional(CONF_ACTION_STOP_CHARGING): EntitySelector(
+                    EntitySelectorConfig(domain="script"),
+                ),
+                vol.Optional(CONF_ACTION_START_CHARGING): EntitySelector(
+                    EntitySelectorConfig(domain="script"),
                 ),
             }
         )

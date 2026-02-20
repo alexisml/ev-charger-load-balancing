@@ -23,6 +23,11 @@ CONF_MAX_SERVICE_CURRENT = "max_service_current"
 CONF_UNAVAILABLE_BEHAVIOR = "unavailable_behavior"
 CONF_UNAVAILABLE_FALLBACK_CURRENT = "unavailable_fallback_current"
 
+# Action config keys (script entity IDs for charger control)
+CONF_ACTION_SET_CURRENT = "action_set_current"
+CONF_ACTION_STOP_CHARGING = "action_stop_charging"
+CONF_ACTION_START_CHARGING = "action_start_charging"
+
 # Unavailable behavior options
 UNAVAILABLE_BEHAVIOR_STOP = "stop"
 UNAVAILABLE_BEHAVIOR_IGNORE = "ignore"
