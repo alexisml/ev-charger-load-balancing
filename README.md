@@ -1,4 +1,5 @@
 [![Unit Tests](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/alexisml/ha-ev-charger-balancer/graph/badge.svg)](https://codecov.io/gh/alexisml/ha-ev-charger-balancer)
 
 # EV Charger Load Balancing (HACS)
 

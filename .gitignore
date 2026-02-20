@@ -24,3 +24,5 @@ env/
 
 # Test artifacts
 test-results/
+.coverage
+coverage.xml

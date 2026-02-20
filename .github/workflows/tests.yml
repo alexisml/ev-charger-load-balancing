@@ -28,10 +28,16 @@ jobs:
           pip install -r tests/requirements.txt
 
       - name: Run unit tests
-        run: python -m pytest tests/ -v --junit-xml=test-results/results.xml
+        run: python -m pytest tests/ -v --junit-xml=test-results/results.xml --cov=custom_components/ev_lb --cov-report=xml --cov-fail-under=90
 
       - name: Publish test results
         uses: EnricoMi/publish-unit-test-result-action@v2.22.0
         if: always()
         with:
           files: test-results/results.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
