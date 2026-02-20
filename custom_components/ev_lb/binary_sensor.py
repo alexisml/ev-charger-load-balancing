@@ -7,11 +7,13 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import get_device_info
+from .const import DOMAIN, get_device_info
+from .coordinator import EvLoadBalancerCoordinator
 
 
 async def async_setup_entry(
@@ -20,7 +22,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up EV LB binary sensor entities from a config entry."""
-    async_add_entities([EvLbActiveBinarySensor(entry)])
+    coordinator: EvLoadBalancerCoordinator = hass.data[DOMAIN][entry.entry_id][
+        "coordinator"
+    ]
+    async_add_entities([EvLbActiveBinarySensor(entry, coordinator)])
 
 
 class EvLbActiveBinarySensor(BinarySensorEntity, RestoreEntity):
@@ -31,14 +36,30 @@ class EvLbActiveBinarySensor(BinarySensorEntity, RestoreEntity):
     _attr_device_class = BinarySensorDeviceClass.RUNNING
     _attr_is_on = False
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(
+        self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
+    ) -> None:
         """Initialise the binary sensor."""
         self._attr_unique_id = f"{entry.entry_id}_active"
         self._attr_device_info = get_device_info(entry)
+        self._coordinator = coordinator
 
     async def async_added_to_hass(self) -> None:
-        """Restore last known value on startup."""
+        """Restore last known value and subscribe to coordinator updates."""
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         if last and last.state is not None:
             self._attr_is_on = last.state == "on"
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._coordinator.signal_update,
+                self._handle_update,
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        """Update binary sensor state from coordinator."""
+        self._attr_is_on = self._coordinator.active
+        self.async_write_ha_state()

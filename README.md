@@ -18,7 +18,7 @@ This project gives Home Assistant users a native, no-helper-required solution to
 
 > ⚠️ **Current limitation (PR-1):** This integration currently supports **one charger per instance**. Multiple-charger support with per-charger prioritization is planned for Phase 2 (post-MVP). Multiple instances of this integration are not supported — only one config entry can be created. See the [MVP plan](docs/documentation/milestones/01-2026-02-19-mvp-plan.md) and the [multi-charger plan](docs/documentation/milestones/02-2026-02-19-multi-charger-plan.md) for details.
 
-Status: In development — custom integration (PR-2: core entities + device linking complete)
+Status: In development — custom integration (PR-3: single-charger balancing engine complete)
 
 ## Why a custom integration?
 
@@ -46,13 +46,26 @@ See [`docs/development-memories/2026-02-19-lessons-learned.md`](docs/development
 | **Max charger current** (A) | Per-charger upper limit; can be changed at runtime |
 | **Min EV current** (A) | Lowest current at which the charger can operate (IEC 61851: 6 A); below this charging must stop |
 | **Ramp-up time** (s) | Cooldown before allowing current to increase after a dynamic reduction (default 30 s) |
+| **Unavailable behavior** | What to do when the power meter is unavailable: **stop** (default), **ignore**, or **set current** |
+| **Fallback current** (A) | Charging current to use in "set current" mode — capped at the charger maximum to prevent exceeding the physical limit |
 | **Actions** | User-supplied scripts: `set_current`, `stop_charging`, `start_charging` |
 
 ---
 
 ### Decision loop
 
-Every time the power meter reports a new value, the balancer runs the following logic:
+The balancer is **event-driven** — it does not poll on a timer. A recomputation is triggered by any of the following events:
+
+| Trigger event | What happens | Latency |
+|---|---|---|
+| **Power meter state change** | The configured `sensor.*` entity reports a new Watt value. The coordinator reads it and runs the full balancing algorithm. | Instant — runs on the same HA event-loop tick as the state change. |
+| **Max charger current changed** | The user (or an automation) changes the `number.max_charger_current` entity. The coordinator re-reads the current power meter value and recomputes immediately. | Instant — no need to wait for the next meter event. |
+| **Min EV current changed** | Same as above for `number.min_ev_current`. If the new minimum is higher than the current target, charging stops on this tick. | Instant. |
+| **Load balancing re-enabled** | The `switch.enabled` entity is turned back on. The coordinator reads the current power meter value and runs a full recomputation. | Instant. |
+
+> **Note:** When the `switch.enabled` entity is turned **off**, power-meter events are ignored and no recomputation occurs. The charger current is left at its last value until load balancing is re-enabled.
+
+On each trigger, the coordinator runs the following logic:
 
 ```
 Power meter changes
@@ -125,6 +138,36 @@ Key rules:
 
 ---
 
+### Home Assistant restart
+
+All entity states (sensors, numbers, switch) survive a restart because each entity uses Home Assistant's **RestoreEntity** mechanism. On startup:
+
+1. Sensors restore their last known values (`current_set`, `available_current`).
+2. Number entities restore their runtime parameters (`max_charger_current`, `min_ev_current`).
+3. The switch restores its `enabled` state.
+4. The `current_set` sensor syncs its restored value back into the coordinator so the balancing algorithm continues from where it left off — no spike or drop.
+5. The coordinator starts listening for power-meter state changes. The next meter event triggers a normal recomputation.
+
+> **Note:** Between restart completion and the first power meter event, the charger current stays at the last known value. No action is taken until fresh meter data arrives.
+
+---
+
+### Power meter unavailable
+
+When the power meter entity transitions to `unavailable` or `unknown`, the coordinator can no longer compute headroom. The behavior is controlled by the **"When power meter is unavailable"** config setting:
+
+| Mode | Behavior |
+|---|---|
+| **Stop charging** (default) | Charger is immediately set to 0 A — safest option when meter data is unreliable. |
+| **Ignore** | Do nothing — keep the last computed charger current. Useful if brief meter dropouts are common and you don't want to interrupt charging. |
+| **Set a specific current** | Apply the configured fallback current, **capped at the charger maximum**. This ensures the fallback never exceeds the physical charger limit. For example: if max charger current is 32 A and the fallback is 50 A, the charger is set to 32 A; if the fallback is 6 A, the charger drops to 6 A. |
+
+When the meter recovers and starts reporting valid values again, normal computation resumes automatically on the next state change.
+
+> **Note:** The EV charger device itself is not monitored by this integration. The integration only controls the *target current* it sends; it does not track whether the charger is physically connected or responding. Charger health monitoring is the responsibility of the charger integration (e.g., OCPP).
+
+---
+
 ### Multi-charger fairness — planned feature
 
 > ⚠️ **Not yet implemented.** Multi-charger support with per-charger prioritization/weighting is planned for Phase 2 (post-MVP). See [`docs/documentation/milestones/02-2026-02-19-multi-charger-plan.md`](docs/documentation/milestones/02-2026-02-19-multi-charger-plan.md) for the Phase 2 plan. The water-filling algorithm is already unit-tested in `tests/test_load_balancer.py` and will feed into that work.
@@ -166,7 +209,7 @@ Available current pool
 
 1. ~~Scaffold `custom_components/ev_lb/` with `manifest.json`, `__init__.py`, `config_flow.py`.~~ ✅ Done (PR-1)
 2. ~~Add `sensor.py`, `binary_sensor.py`, `number.py`, `switch.py`.~~ ✅ Done (PR-2)
-3. Port the computation core from `tests/` into the integration.
+3. ~~Port the computation core from `tests/` into the integration.~~ ✅ Done (PR-3)
 4. Write HA integration tests using `pytest-homeassistant-custom-component`.
 5. Publish via HACS.
 

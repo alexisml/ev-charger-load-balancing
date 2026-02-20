@@ -9,10 +9,12 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfElectricCurrent
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import get_device_info
+from .const import DOMAIN, get_device_info
+from .coordinator import EvLoadBalancerCoordinator
 
 
 async def async_setup_entry(
@@ -21,10 +23,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up EV LB sensor entities from a config entry."""
+    coordinator: EvLoadBalancerCoordinator = hass.data[DOMAIN][entry.entry_id][
+        "coordinator"
+    ]
     async_add_entities(
         [
-            EvLbCurrentSetSensor(entry),
-            EvLbAvailableCurrentSensor(entry),
+            EvLbCurrentSetSensor(entry, coordinator),
+            EvLbAvailableCurrentSensor(entry, coordinator),
         ]
     )
 
@@ -39,17 +44,34 @@ class EvLbCurrentSetSensor(RestoreSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_value = 0.0
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(
+        self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
+    ) -> None:
         """Initialise the sensor."""
         self._attr_unique_id = f"{entry.entry_id}_current_set"
         self._attr_device_info = get_device_info(entry)
+        self._coordinator = coordinator
 
     async def async_added_to_hass(self) -> None:
-        """Restore last known value on startup."""
+        """Restore last known value and subscribe to coordinator updates."""
         await super().async_added_to_hass()
         last = await self.async_get_last_sensor_data()
         if last and last.native_value is not None:
             self._attr_native_value = last.native_value
+            self._coordinator.current_set_a = float(last.native_value)
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._coordinator.signal_update,
+                self._handle_update,
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        """Update sensor state from coordinator."""
+        self._attr_native_value = self._coordinator.current_set_a
+        self.async_write_ha_state()
 
 
 class EvLbAvailableCurrentSensor(RestoreSensor):
@@ -62,14 +84,30 @@ class EvLbAvailableCurrentSensor(RestoreSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_value = 0.0
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(
+        self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
+    ) -> None:
         """Initialise the sensor."""
         self._attr_unique_id = f"{entry.entry_id}_available_current"
         self._attr_device_info = get_device_info(entry)
+        self._coordinator = coordinator
 
     async def async_added_to_hass(self) -> None:
-        """Restore last known value on startup."""
+        """Restore last known value and subscribe to coordinator updates."""
         await super().async_added_to_hass()
         last = await self.async_get_last_sensor_data()
         if last and last.native_value is not None:
             self._attr_native_value = last.native_value
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._coordinator.signal_update,
+                self._handle_update,
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        """Update sensor state from coordinator."""
+        self._attr_native_value = self._coordinator.available_current_a
+        self.async_write_ha_state()

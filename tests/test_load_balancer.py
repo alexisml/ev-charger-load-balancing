@@ -11,12 +11,11 @@ Tests cover:
   disabled state, power sensor unavailable, charger at zero load
 - apply_ramp_up_limit: cooldown enforcement, no-op when decreasing or no prior reduction
 
-The computation functions live in tests/load_balancer_core.py until they are
-ported into the custom integration (custom_components/ev_lb/).
+The computation functions live in custom_components/ev_lb/load_balancer.py.
 """
 
 import pytest
-from load_balancer_core import (
+from custom_components.ev_lb.load_balancer import (
     VOLTAGE_DEFAULT,
     compute_available_current,
     clamp_current,
