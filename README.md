@@ -52,7 +52,18 @@ See [`docs/development-memories/2026-02-19-lessons-learned.md`](docs/development
 
 ### Decision loop
 
-Every time the power meter reports a new value, the balancer runs the following logic:
+The balancer is **event-driven** — it does not poll on a timer. A recomputation is triggered by any of the following events:
+
+| Trigger event | What happens | Latency |
+|---|---|---|
+| **Power meter state change** | The configured `sensor.*` entity reports a new Watt value. The coordinator reads it and runs the full balancing algorithm. | Instant — runs on the same HA event-loop tick as the state change. |
+| **Max charger current changed** | The user (or an automation) changes the `number.max_charger_current` entity. The coordinator re-reads the current power meter value and recomputes immediately. | Instant — no need to wait for the next meter event. |
+| **Min EV current changed** | Same as above for `number.min_ev_current`. If the new minimum is higher than the current target, charging stops on this tick. | Instant. |
+| **Load balancing re-enabled** | The `switch.enabled` entity is turned back on. The coordinator reads the current power meter value and runs a full recomputation. | Instant. |
+
+> **Note:** When the `switch.enabled` entity is turned **off**, power-meter events are ignored and no recomputation occurs. The charger current is left at its last value until load balancing is re-enabled.
+
+On each trigger, the coordinator runs the following logic:
 
 ```
 Power meter changes

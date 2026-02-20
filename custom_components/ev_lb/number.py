@@ -67,10 +67,11 @@ class EvLbMaxChargerCurrentNumber(RestoreNumber):
         self._coordinator.max_charger_current = float(self._attr_native_value)
 
     async def async_set_native_value(self, value: float) -> None:
-        """Update the current value and notify the coordinator."""
+        """Update the current value, notify the coordinator, and trigger recomputation."""
         self._attr_native_value = value
         self._coordinator.max_charger_current = value
         self.async_write_ha_state()
+        self._coordinator.async_recompute_from_current_state()
 
 
 class EvLbMinEvCurrentNumber(RestoreNumber):
@@ -102,7 +103,8 @@ class EvLbMinEvCurrentNumber(RestoreNumber):
         self._coordinator.min_ev_current = float(self._attr_native_value)
 
     async def async_set_native_value(self, value: float) -> None:
-        """Update the current value and notify the coordinator."""
+        """Update the current value, notify the coordinator, and trigger recomputation."""
         self._attr_native_value = value
         self._coordinator.min_ev_current = value
         self.async_write_ha_state()
+        self._coordinator.async_recompute_from_current_state()

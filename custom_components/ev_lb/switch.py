@@ -49,10 +49,11 @@ class EvLbEnabledSwitch(SwitchEntity, RestoreEntity):
         self._coordinator.enabled = self._attr_is_on
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Turn on load balancing."""
+        """Turn on load balancing and trigger an immediate recomputation."""
         self._attr_is_on = True
         self._coordinator.enabled = True
         self.async_write_ha_state()
+        self._coordinator.async_recompute_from_current_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn off load balancing."""

@@ -9,7 +9,8 @@ Tests cover:
 - Current increases are held during ramp-up cooldown
 - Load balancing respects the enabled/disabled switch
 - Unavailable/unknown power meter states are ignored
-- Runtime changes to max charger current and min EV current are reflected
+- Runtime changes to max charger current and min EV current trigger immediate recomputation
+- Re-enabling the switch triggers immediate recomputation
 """
 
 import pytest
@@ -457,12 +458,12 @@ class TestPowerMeterEdgeCases:
 
 
 class TestRuntimeParameterChanges:
-    """Verify that changing number entities affects the balancing computation."""
+    """Verify that changing number entities immediately triggers recomputation."""
 
-    async def test_lower_max_charger_current_caps_target(
+    async def test_lower_max_charger_current_caps_target_immediately(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Lowering the max charger current immediately caps the target on the next meter event."""
+        """Lowering the max charger current immediately caps the target without a new meter event."""
         await _setup(hass, mock_config_entry)
 
         max_current_id = _get_entity_id(
@@ -477,23 +478,22 @@ class TestRuntimeParameterChanges:
         await hass.async_block_till_done()
         assert float(hass.states.get(current_set_id).state) == 18.0
 
-        # Lower max charger current to 10 A
+        # Lower max charger current to 10 A → immediate recomputation
         await hass.services.async_call(
             "number",
             "set_value",
             {"entity_id": max_current_id, "value": 10.0},
             blocking=True,
         )
-
-        # Trigger a new meter event → should be capped at 10 A
-        hass.states.async_set(POWER_METER, "3001")
         await hass.async_block_till_done()
+
+        # No new meter event needed — target is already capped at 10 A
         assert float(hass.states.get(current_set_id).state) == 10.0
 
-    async def test_higher_min_ev_current_stops_charging_sooner(
+    async def test_higher_min_ev_current_stops_charging_immediately(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Raising the min EV current threshold causes charging to stop sooner."""
+        """Raising the min EV current threshold immediately stops charging without a new meter event."""
         await _setup(hass, mock_config_entry)
 
         min_current_id = _get_entity_id(
@@ -513,15 +513,52 @@ class TestRuntimeParameterChanges:
         await hass.async_block_till_done()
         assert float(hass.states.get(current_set_id).state) == 8.0  # stable
 
-        # Step 3: raise min to 10 A (8 A < 10 A threshold)
+        # Step 3: raise min to 10 A → immediate recomputation → 8 A < 10 A → stop
         await hass.services.async_call(
             "number",
             "set_value",
             {"entity_id": min_current_id, "value": 10.0},
             blocking=True,
         )
-
-        # Step 4: trigger event → target ≈ 8 A < min 10 A → stop
-        hass.states.async_set(POWER_METER, "7361")
         await hass.async_block_till_done()
+
+        # No new meter event needed — charging already stopped
         assert float(hass.states.get(current_set_id).state) == 0.0
+
+    async def test_switch_reenable_triggers_recomputation(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Re-enabling the switch immediately recomputes from the current power meter value."""
+        await _setup(hass, mock_config_entry)
+
+        switch_id = _get_entity_id(
+            hass, mock_config_entry, "switch", "enabled"
+        )
+        current_set_id = _get_entity_id(
+            hass, mock_config_entry, "sensor", "current_set"
+        )
+
+        # Set a power meter value while enabled
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+        assert float(hass.states.get(current_set_id).state) > 0
+
+        # Disable → state stays (no reset)
+        await hass.services.async_call(
+            "switch", "turn_off", {"entity_id": switch_id}, blocking=True
+        )
+
+        # Change power meter while disabled — ignored
+        hass.states.async_set(POWER_METER, "5000")
+        await hass.async_block_till_done()
+
+        # Re-enable → should immediately recompute from the current meter value (5000 W)
+        await hass.services.async_call(
+            "switch", "turn_on", {"entity_id": switch_id}, blocking=True
+        )
+        await hass.async_block_till_done()
+
+        # target = prev_set + available = prev + (32 - 5000/230)
+        # It should have a value that corresponds to the current meter reading
+        value = float(hass.states.get(current_set_id).state)
+        assert value > 0

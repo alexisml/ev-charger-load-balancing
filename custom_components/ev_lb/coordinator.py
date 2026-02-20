@@ -123,6 +123,32 @@ class EvLoadBalancerCoordinator:
         self._recompute(house_power_w)
 
     # ------------------------------------------------------------------
+    # On-demand recompute (triggered by number/switch changes)
+    # ------------------------------------------------------------------
+
+    @callback
+    def async_recompute_from_current_state(self) -> None:
+        """Re-run the balancing algorithm using the last known power meter value.
+
+        Called when a runtime parameter changes (max charger current,
+        min EV current, or the enabled switch) so the new value takes
+        effect immediately without waiting for the next power-meter event.
+        """
+        if not self.enabled:
+            return
+
+        state = self.hass.states.get(self._power_meter_entity)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return
+
+        try:
+            house_power_w = float(state.state)
+        except (ValueError, TypeError):
+            return
+
+        self._recompute(house_power_w)
+
+    # ------------------------------------------------------------------
     # Core computation
     # ------------------------------------------------------------------
 
