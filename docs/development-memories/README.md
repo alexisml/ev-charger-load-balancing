@@ -8,6 +8,7 @@ This directory stores development-focused documents: research plans, design note
   - `docs/development-memories/<YYYY-MM-DD>-<short-descriptive-file-name>.md`
 - Milestone documents (MVP plan, release plans, etc.) go under `docs/documentation/milestones/` with a numeric prefix:
   - `docs/documentation/milestones/<NN>-<YYYY-MM-DD>-<short-name>.md`
+- **Every PR MUST include a development memory file** documenting the work done, design decisions, lessons learned, and next steps. The file should be named after the PR milestone, e.g. `2026-02-20-pr3-balancing-engine.md`.
 
 ## Why
 
