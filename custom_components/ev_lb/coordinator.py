@@ -19,10 +19,12 @@ from homeassistant.helpers.event import async_track_state_change_event
 from .const import (
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
+    CONF_UNAVAILABLE_FALLBACK_CURRENT,
     CONF_VOLTAGE,
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
     DEFAULT_RAMP_UP_TIME,
+    DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
     SIGNAL_UPDATE_FMT,
 )
 from .load_balancer import apply_ramp_up_limit, clamp_current, compute_available_current
@@ -47,6 +49,10 @@ class EvLoadBalancerCoordinator:
         self._voltage: float = entry.data[CONF_VOLTAGE]
         self._max_service_current: float = entry.data[CONF_MAX_SERVICE_CURRENT]
         self._power_meter_entity: str = entry.data[CONF_POWER_METER_ENTITY]
+        self._unavailable_fallback_a: float = entry.data.get(
+            CONF_UNAVAILABLE_FALLBACK_CURRENT,
+            DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
+        )
 
         # Runtime parameters (updated by number/switch entities)
         self.max_charger_current: float = DEFAULT_MAX_CHARGER_CURRENT
@@ -110,6 +116,7 @@ class EvLoadBalancerCoordinator:
             "unavailable",
             "unknown",
         ):
+            self._apply_fallback_current()
             return
 
         try:
@@ -147,6 +154,30 @@ class EvLoadBalancerCoordinator:
             return
 
         self._recompute(house_power_w)
+
+    # ------------------------------------------------------------------
+    # Fallback for unavailable power meter
+    # ------------------------------------------------------------------
+
+    def _apply_fallback_current(self) -> None:
+        """Apply the configured fallback current when the power meter is unavailable.
+
+        This is a safety measure: when the power meter becomes unavailable
+        the coordinator cannot compute headroom, so it falls back to the
+        user-configured fallback current (default 0 A = stop charging).
+        """
+        fallback = self._unavailable_fallback_a
+        _LOGGER.warning(
+            "Power meter %s is unavailable — applying fallback current %.1f A",
+            self._power_meter_entity,
+            fallback,
+        )
+
+        self.available_current_a = 0.0
+        self.current_set_a = fallback
+        self.active = fallback > 0
+
+        async_dispatcher_send(self.hass, self.signal_update)
 
     # ------------------------------------------------------------------
     # Core computation

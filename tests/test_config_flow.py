@@ -17,6 +17,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.ev_lb.const import (
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
+    CONF_UNAVAILABLE_FALLBACK_CURRENT,
     CONF_VOLTAGE,
     DOMAIN,
 )
@@ -55,6 +56,7 @@ async def test_user_flow_success(hass: HomeAssistant) -> None:
         CONF_POWER_METER_ENTITY: "sensor.house_power_w",
         CONF_VOLTAGE: 230.0,
         CONF_MAX_SERVICE_CURRENT: 32.0,
+        CONF_UNAVAILABLE_FALLBACK_CURRENT: 0.0,
     }
 
 

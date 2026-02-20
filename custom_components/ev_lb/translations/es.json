@@ -7,12 +7,14 @@
         "data": {
           "power_meter_entity": "Sensor de consumo eléctrico",
           "voltage": "Voltaje de suministro",
-          "max_service_current": "Corriente máxima del servicio (capacidad del interruptor)"
+          "max_service_current": "Corriente máxima del servicio (capacidad del interruptor)",
+          "unavailable_fallback_current": "Corriente de respaldo cuando el medidor no está disponible"
         },
         "data_description": {
           "power_meter_entity": "Entidad de sensor que reporta el consumo eléctrico total del hogar en Watts.",
           "voltage": "Voltaje nominal de suministro en Volts (usado para convertir W ↔ A).",
-          "max_service_current": "Capacidad del interruptor principal en Amperes. La carga nunca excederá este límite."
+          "max_service_current": "Capacidad del interruptor principal en Amperes. La carga nunca excederá este límite.",
+          "unavailable_fallback_current": "Corriente de carga (A) a establecer cuando el medidor de consumo no está disponible. Establecer en 0 para detener la carga (opción más segura)."
         }
       }
     },

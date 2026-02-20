@@ -7,12 +7,14 @@
         "data": {
           "power_meter_entity": "Power meter sensor",
           "voltage": "Supply voltage",
-          "max_service_current": "Max service current (breaker rating)"
+          "max_service_current": "Max service current (breaker rating)",
+          "unavailable_fallback_current": "Fallback current when meter is unavailable"
         },
         "data_description": {
           "power_meter_entity": "Sensor entity that reports total household power consumption in Watts.",
           "voltage": "Nominal supply voltage in Volts (used to convert W ↔ A).",
-          "max_service_current": "Whole-house breaker rating in Amps. Charging will never exceed this limit."
+          "max_service_current": "Whole-house breaker rating in Amps. Charging will never exceed this limit.",
+          "unavailable_fallback_current": "Charging current (A) to set when the power meter becomes unavailable. Set to 0 to stop charging (safest default)."
         }
       }
     },

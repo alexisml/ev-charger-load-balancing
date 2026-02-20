@@ -19,10 +19,13 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
+    CONF_UNAVAILABLE_FALLBACK_CURRENT,
     CONF_VOLTAGE,
     DEFAULT_MAX_SERVICE_CURRENT,
+    DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
     DEFAULT_VOLTAGE,
     DOMAIN,
+    MAX_CHARGER_CURRENT,
     MAX_SERVICE_CURRENT,
     MAX_VOLTAGE,
     MIN_SERVICE_CURRENT,
@@ -85,6 +88,18 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):
                     NumberSelectorConfig(
                         min=MIN_SERVICE_CURRENT,
                         max=MAX_SERVICE_CURRENT,
+                        step=1.0,
+                        unit_of_measurement="A",
+                        mode=NumberSelectorMode.BOX,
+                    ),
+                ),
+                vol.Required(
+                    CONF_UNAVAILABLE_FALLBACK_CURRENT,
+                    default=DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0.0,
+                        max=MAX_CHARGER_CURRENT,
                         step=1.0,
                         unit_of_measurement="A",
                         mode=NumberSelectorMode.BOX,

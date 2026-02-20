@@ -164,7 +164,7 @@ pip install -r tests/requirements.txt
 python -m pytest tests/ -v
 ```
 
-Expected: all 76 tests pass (39 load-balancer logic + 4 config flow + 2 integration setup/unload + 14 entity platform tests + 17 balancing engine tests).
+Expected: all 78 tests pass (39 load-balancer logic + 4 config flow + 2 integration setup/unload + 14 entity platform tests + 19 balancing engine tests).
 
 ### 5b — Config flow tests only
 

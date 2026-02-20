@@ -46,6 +46,7 @@ See [`docs/development-memories/2026-02-19-lessons-learned.md`](docs/development
 | **Max charger current** (A) | Per-charger upper limit; can be changed at runtime |
 | **Min EV current** (A) | Lowest current at which the charger can operate (IEC 61851: 6 A); below this charging must stop |
 | **Ramp-up time** (s) | Cooldown before allowing current to increase after a dynamic reduction (default 30 s) |
+| **Fallback current** (A) | Charging current to apply when the power meter is unavailable (default 0 A = stop charging) |
 | **Actions** | User-supplied scripts: `set_current`, `stop_charging`, `start_charging` |
 
 ---
@@ -133,6 +134,35 @@ Key rules:
 - **Increases are held for `ramp_up_time_s`** after any reduction — this prevents rapid oscillation when load hovers near the service limit.
 - **Stopping charging** happens when even the minimum current would exceed the service limit.
 - **Resuming charging** happens when the available current rises back above the minimum threshold and the ramp-up cooldown has elapsed.
+
+---
+
+### Home Assistant restart
+
+All entity states (sensors, numbers, switch) survive a restart because each entity uses Home Assistant's **RestoreEntity** mechanism. On startup:
+
+1. Sensors restore their last known values (`current_set`, `available_current`).
+2. Number entities restore their runtime parameters (`max_charger_current`, `min_ev_current`).
+3. The switch restores its `enabled` state.
+4. The `current_set` sensor syncs its restored value back into the coordinator so the balancing algorithm continues from where it left off — no spike or drop.
+5. The coordinator starts listening for power-meter state changes. The next meter event triggers a normal recomputation.
+
+> **Note:** Between restart completion and the first power meter event, the charger current stays at the last known value. No action is taken until fresh meter data arrives.
+
+---
+
+### Power meter unavailable
+
+When the power meter entity transitions to `unavailable` or `unknown`, the coordinator can no longer compute headroom. Instead of silently holding the last value (which could be unsafe), it applies a **configurable fallback current**:
+
+| Fallback setting | Behavior |
+|---|---|
+| `0 A` (default) | Charging stops immediately — safest option when meter data is unreliable. |
+| `> 0 A` (e.g., `6 A`) | Charger is set to the specified current — useful when the user prefers low-power charging over a full stop. |
+
+The fallback current is configured during setup in the config flow ("Fallback current when meter is unavailable"). When the meter recovers and starts reporting valid values again, normal computation resumes automatically on the next state change.
+
+> **Note:** The EV charger device itself is not monitored by this integration. The integration only controls the *target current* it sends; it does not track whether the charger is physically connected or responding. Charger health monitoring is the responsibility of the charger integration (e.g., OCPP).
 
 ---
 

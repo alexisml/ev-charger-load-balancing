@@ -8,9 +8,12 @@ Tests cover:
 - Current reductions are instant (no ramp-up delay)
 - Current increases are held during ramp-up cooldown
 - Load balancing respects the enabled/disabled switch
-- Unavailable/unknown power meter states are ignored
+- Unavailable/unknown power meter applies fallback current (default 0 A)
+- Non-numeric power meter values are ignored
 - Runtime changes to max charger current and min EV current trigger immediate recomputation
 - Re-enabling the switch triggers immediate recomputation
+- Custom fallback current is applied when meter is unavailable
+- Normal computation resumes when meter recovers from unavailable
 """
 
 import pytest
@@ -23,6 +26,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.ev_lb.const import (
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
+    CONF_UNAVAILABLE_FALLBACK_CURRENT,
     CONF_VOLTAGE,
     DOMAIN,
 )
@@ -389,10 +393,10 @@ class TestEnabledSwitch:
 class TestPowerMeterEdgeCases:
     """Verify edge cases with unavailable/unknown/invalid power meter values."""
 
-    async def test_unavailable_power_meter_ignored(
+    async def test_unavailable_power_meter_applies_fallback_current(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Unavailable power meter state is ignored and entities keep previous values."""
+        """Unavailable power meter triggers fallback to configured current (default 0 A)."""
         await _setup(hass, mock_config_entry)
 
         current_set_id = _get_entity_id(
@@ -402,19 +406,17 @@ class TestPowerMeterEdgeCases:
         # First set a valid value
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
-        before = float(hass.states.get(current_set_id).state)
+        assert float(hass.states.get(current_set_id).state) > 0
 
-        # Now set unavailable
+        # Now set unavailable — should fall back to 0 A (stop charging)
         hass.states.async_set(POWER_METER, "unavailable")
         await hass.async_block_till_done()
-        after = float(hass.states.get(current_set_id).state)
+        assert float(hass.states.get(current_set_id).state) == 0.0
 
-        assert after == before
-
-    async def test_unknown_power_meter_ignored(
+    async def test_unknown_power_meter_applies_fallback_current(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Unknown power meter state is ignored and entities keep previous values."""
+        """Unknown power meter triggers fallback to configured current (default 0 A)."""
         await _setup(hass, mock_config_entry)
 
         current_set_id = _get_entity_id(
@@ -423,13 +425,11 @@ class TestPowerMeterEdgeCases:
 
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
-        before = float(hass.states.get(current_set_id).state)
+        assert float(hass.states.get(current_set_id).state) > 0
 
         hass.states.async_set(POWER_METER, "unknown")
         await hass.async_block_till_done()
-        after = float(hass.states.get(current_set_id).state)
-
-        assert after == before
+        assert float(hass.states.get(current_set_id).state) == 0.0
 
     async def test_non_numeric_power_meter_ignored(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
@@ -562,3 +562,83 @@ class TestRuntimeParameterChanges:
         # It should have a value that corresponds to the current meter reading
         value = float(hass.states.get(current_set_id).state)
         assert value > 0
+
+
+# ---------------------------------------------------------------------------
+# Custom fallback current for unavailable meter
+# ---------------------------------------------------------------------------
+
+
+class TestCustomFallbackCurrent:
+    """Verify that a non-zero fallback current is applied when the meter goes unavailable."""
+
+    async def test_custom_fallback_current_applied_on_unavailable(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Charger is set to the configured fallback current when meter becomes unavailable."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+                CONF_UNAVAILABLE_FALLBACK_CURRENT: 10.0,
+            },
+            title="EV Load Balancing",
+        )
+        hass.states.async_set(POWER_METER, "0")
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        current_set_id = _get_entity_id(hass, entry, "sensor", "current_set")
+        active_id = _get_entity_id(hass, entry, "binary_sensor", "active")
+
+        # Set a valid meter value first
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+        assert float(hass.states.get(current_set_id).state) > 0
+
+        # Meter goes unavailable → fallback to 10 A
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+        assert float(hass.states.get(current_set_id).state) == 10.0
+        assert hass.states.get(active_id).state == "on"
+
+    async def test_meter_recovery_resumes_normal_computation(
+        self, hass: HomeAssistant
+    ) -> None:
+        """When the meter recovers from unavailable, normal computation resumes."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+                CONF_UNAVAILABLE_FALLBACK_CURRENT: 10.0,
+            },
+            title="EV Load Balancing",
+        )
+        hass.states.async_set(POWER_METER, "0")
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        current_set_id = _get_entity_id(hass, entry, "sensor", "current_set")
+
+        # Normal operation
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+        normal_value = float(hass.states.get(current_set_id).state)
+        assert normal_value > 0
+
+        # Meter goes unavailable → fallback
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+        assert float(hass.states.get(current_set_id).state) == 10.0
+
+        # Meter recovers → resumes normal computation
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+        recovered_value = float(hass.states.get(current_set_id).state)
+        assert recovered_value > 0
