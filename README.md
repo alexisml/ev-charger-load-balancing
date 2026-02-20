@@ -46,7 +46,8 @@ See [`docs/development-memories/2026-02-19-lessons-learned.md`](docs/development
 | **Max charger current** (A) | Per-charger upper limit; can be changed at runtime |
 | **Min EV current** (A) | Lowest current at which the charger can operate (IEC 61851: 6 A); below this charging must stop |
 | **Ramp-up time** (s) | Cooldown before allowing current to increase after a dynamic reduction (default 30 s) |
-| **Fallback current** (A) | Charging current to apply when the power meter is unavailable (default 0 A = stop charging) |
+| **Unavailable behavior** | What to do when the power meter is unavailable: **stop** (default), **ignore**, or **set current** |
+| **Fallback current** (A) | Charging current to use in "set current" mode — capped at min(configured, current target) to prevent unsafe increases |
 | **Actions** | User-supplied scripts: `set_current`, `stop_charging`, `start_charging` |
 
 ---
@@ -153,14 +154,15 @@ All entity states (sensors, numbers, switch) survive a restart because each enti
 
 ### Power meter unavailable
 
-When the power meter entity transitions to `unavailable` or `unknown`, the coordinator can no longer compute headroom. Instead of silently holding the last value (which could be unsafe), it applies a **configurable fallback current**:
+When the power meter entity transitions to `unavailable` or `unknown`, the coordinator can no longer compute headroom. The behavior is controlled by the **"When power meter is unavailable"** config setting:
 
-| Fallback setting | Behavior |
+| Mode | Behavior |
 |---|---|
-| `0 A` (default) | Charging stops immediately — safest option when meter data is unreliable. |
-| `> 0 A` (e.g., `6 A`) | Charger is set to the specified current — useful when the user prefers low-power charging over a full stop. |
+| **Stop charging** (default) | Charger is immediately set to 0 A — safest option when meter data is unreliable. |
+| **Ignore** | Do nothing — keep the last computed charger current. Useful if brief meter dropouts are common and you don't want to interrupt charging. |
+| **Set a specific current** | Apply the configured fallback current, **capped at the minimum of the fallback value and the current target**. This ensures the charger never increases beyond what was last known to be safe. For example: if the target was 10 A and the fallback is 20 A, the charger stays at 10 A; if the target was 18 A and the fallback is 6 A, the charger drops to 6 A. |
 
-The fallback current is configured during setup in the config flow ("Fallback current when meter is unavailable"). When the meter recovers and starts reporting valid values again, normal computation resumes automatically on the next state change.
+When the meter recovers and starts reporting valid values again, normal computation resumes automatically on the next state change.
 
 > **Note:** The EV charger device itself is not monitored by this integration. The integration only controls the *target current* it sends; it does not track whether the charger is physically connected or responding. Charger health monitoring is the responsibility of the charger integration (e.g., OCPP).
 

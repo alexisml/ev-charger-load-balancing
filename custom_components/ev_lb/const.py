@@ -20,7 +20,14 @@ PLATFORMS: list[Platform] = [
 CONF_POWER_METER_ENTITY = "power_meter_entity"
 CONF_VOLTAGE = "voltage"
 CONF_MAX_SERVICE_CURRENT = "max_service_current"
+CONF_UNAVAILABLE_BEHAVIOR = "unavailable_behavior"
 CONF_UNAVAILABLE_FALLBACK_CURRENT = "unavailable_fallback_current"
+
+# Unavailable behavior options
+UNAVAILABLE_BEHAVIOR_STOP = "stop"
+UNAVAILABLE_BEHAVIOR_IGNORE = "ignore"
+UNAVAILABLE_BEHAVIOR_SET_CURRENT = "set_current"
+DEFAULT_UNAVAILABLE_BEHAVIOR = UNAVAILABLE_BEHAVIOR_STOP
 
 # Default values
 DEFAULT_VOLTAGE = 230.0
@@ -28,7 +35,7 @@ DEFAULT_MAX_SERVICE_CURRENT = 32.0
 DEFAULT_MAX_CHARGER_CURRENT = 32.0
 DEFAULT_MIN_EV_CURRENT = 6.0
 DEFAULT_RAMP_UP_TIME = 30.0  # Seconds — cooldown before allowing current increase
-DEFAULT_UNAVAILABLE_FALLBACK_CURRENT = 0.0  # Stop charging when meter is unavailable
+DEFAULT_UNAVAILABLE_FALLBACK_CURRENT = 6.0  # Fallback current for "set_current" mode
 
 # Dispatcher signal template — format with entry_id
 SIGNAL_UPDATE_FMT = f"{DOMAIN}_update_{{entry_id}}"

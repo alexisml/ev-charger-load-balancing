@@ -19,13 +19,18 @@ from homeassistant.helpers.event import async_track_state_change_event
 from .const import (
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
+    CONF_UNAVAILABLE_BEHAVIOR,
     CONF_UNAVAILABLE_FALLBACK_CURRENT,
     CONF_VOLTAGE,
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
     DEFAULT_RAMP_UP_TIME,
+    DEFAULT_UNAVAILABLE_BEHAVIOR,
     DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
     SIGNAL_UPDATE_FMT,
+    UNAVAILABLE_BEHAVIOR_IGNORE,
+    UNAVAILABLE_BEHAVIOR_SET_CURRENT,
+    UNAVAILABLE_BEHAVIOR_STOP,
 )
 from .load_balancer import apply_ramp_up_limit, clamp_current, compute_available_current
 
@@ -49,6 +54,10 @@ class EvLoadBalancerCoordinator:
         self._voltage: float = entry.data[CONF_VOLTAGE]
         self._max_service_current: float = entry.data[CONF_MAX_SERVICE_CURRENT]
         self._power_meter_entity: str = entry.data[CONF_POWER_METER_ENTITY]
+        self._unavailable_behavior: str = entry.data.get(
+            CONF_UNAVAILABLE_BEHAVIOR,
+            DEFAULT_UNAVAILABLE_BEHAVIOR,
+        )
         self._unavailable_fallback_a: float = entry.data.get(
             CONF_UNAVAILABLE_FALLBACK_CURRENT,
             DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
@@ -160,21 +169,47 @@ class EvLoadBalancerCoordinator:
     # ------------------------------------------------------------------
 
     def _apply_fallback_current(self) -> None:
-        """Apply the configured fallback current when the power meter is unavailable.
+        """Handle the power meter becoming unavailable or unknown.
 
-        This is a safety measure: when the power meter becomes unavailable
-        the coordinator cannot compute headroom, so it falls back to the
-        user-configured fallback current (default 0 A = stop charging).
+        Behavior depends on the configured ``unavailable_behavior``:
+
+        * **ignore** — do nothing; keep the last computed values.
+        * **stop** — set charger current to 0 A (safest).
+        * **set_current** — apply the configured fallback current, capped
+          at the minimum of that value and the current target so the
+          charger never increases beyond what was last known to be safe.
         """
-        fallback = self._unavailable_fallback_a
-        _LOGGER.warning(
-            "Power meter %s is unavailable — applying fallback current %.1f A",
-            self._power_meter_entity,
-            fallback,
-        )
+        behavior = self._unavailable_behavior
+
+        if behavior == UNAVAILABLE_BEHAVIOR_IGNORE:
+            _LOGGER.info(
+                "Power meter %s is unavailable — ignoring (keeping last value %.1f A)",
+                self._power_meter_entity,
+                self.current_set_a,
+            )
+            return
+
+        if behavior == UNAVAILABLE_BEHAVIOR_SET_CURRENT:
+            # Never increase beyond what was last computed as safe.
+            fallback = min(self._unavailable_fallback_a, self.current_set_a)
+            _LOGGER.warning(
+                "Power meter %s is unavailable — applying fallback current %.1f A "
+                "(configured %.1f A, capped to current target %.1f A)",
+                self._power_meter_entity,
+                fallback,
+                self._unavailable_fallback_a,
+                self.current_set_a,
+            )
+        else:
+            # Default: stop charging
+            fallback = 0.0
+            _LOGGER.warning(
+                "Power meter %s is unavailable — stopping charging (0 A)",
+                self._power_meter_entity,
+            )
 
         # Without a valid meter reading, headroom is unknown — report 0 A
-        # as available and apply the user-configured fallback for the charger.
+        # as available and apply the determined fallback for the charger.
         self.available_current_a = 0.0
         self.current_set_a = fallback
         self.active = fallback > 0
