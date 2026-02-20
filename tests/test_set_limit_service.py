@@ -117,6 +117,40 @@ class TestSetLimitService:
         )
         assert hass.states.get(active_id).state == "off"
 
+    async def test_set_limit_works_when_load_balancing_disabled(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_no_actions: MockConfigEntry,
+    ) -> None:
+        """User can still apply a manual current override when automatic load balancing is disabled."""
+        await setup_integration(hass, mock_config_entry_no_actions)
+
+        # Disable automatic load balancing via the integration's enabled switch.
+        enabled_switch_id = get_entity_id(
+            hass, mock_config_entry_no_actions, "switch", "enabled"
+        )
+        await hass.services.async_call(
+            "switch",
+            "turn_off",
+            {"entity_id": enabled_switch_id},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        # Call set_limit while load balancing is disabled; manual override should still take effect.
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SET_LIMIT,
+            {"current_a": 16.0},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        current_set_id = get_entity_id(
+            hass, mock_config_entry_no_actions, "sensor", "current_set"
+        )
+        assert float(hass.states.get(current_set_id).state) == 16.0
+
 
 # ---------------------------------------------------------------------------
 # ev_lb.set_limit — action script integration

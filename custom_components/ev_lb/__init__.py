@@ -10,7 +10,7 @@ from .coordinator import EvLoadBalancerCoordinator
 
 SERVICE_SET_LIMIT_SCHEMA = vol.Schema(
     {
-        vol.Required("current_a"): vol.Coerce(float),
+        vol.Required("current_a"): vol.All(vol.Coerce(float), vol.Range(min=0)),
     }
 )
 
