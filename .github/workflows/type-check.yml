@@ -1,4 +1,4 @@
-name: Lint
+name: Type Check
 
 on:
   push:
@@ -27,13 +27,3 @@ jobs:
 
       - name: Run Pyright
         run: pyright
-
-  spell-check:
-    name: Spell check (codespell)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run codespell
-        uses: codespell-project/actions-codespell@v2
