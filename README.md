@@ -215,7 +215,7 @@ pip install codespell
 codespell
 ```
 
-Both tools read their configuration from `pyrightconfig.json` and `pyproject.toml` respectively at the repo root.
+These tools read their configuration from `pyrightconfig.json` (Pyright) and `pyproject.toml` (Ruff and codespell) at the repo root.
 
 **Secret scanning** (requires [Gitleaks](https://github.com/gitleaks/gitleaks)):
 ```bash
