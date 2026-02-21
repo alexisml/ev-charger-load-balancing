@@ -61,10 +61,11 @@ Four new reason constants added to `const.py`: `REASON_POWER_METER_UPDATE`, `REA
 
 ## Test coverage
 
-12 integration tests in `test_set_limit_service.py` covering:
+13 integration tests in `test_set_limit_service.py` covering:
 - `set_limit` sets charger current to the requested value
 - `set_limit` clamps at the charger maximum
 - `set_limit` stops charging when below minimum EV current
+- `set_limit` works when load balancing switch is disabled (manual override bypasses enabled check)
 - `set_limit` fires set_current action script (resume transition)
 - `set_limit` fires stop_charging when below minimum
 - One-shot: next power meter event resumes automatic balancing
@@ -75,7 +76,7 @@ Four new reason constants added to `const.py`: `REASON_POWER_METER_UPDATE`, `REA
 - Service is registered on setup
 - Service is removed on unload
 
-All 104 tests pass (92 existing + 12 new). Existing entity count tests updated from 6 to 7 entities.
+All 105 tests pass (92 existing + 13 new). Existing entity count tests updated from 6 to 7 entities.
 
 ## Lessons learned
 
