@@ -40,6 +40,12 @@ SET_CURRENT_SCRIPT = "script.ev_lb_set_current"
 STOP_CHARGING_SCRIPT = "script.ev_lb_stop_charging"
 START_CHARGING_SCRIPT = "script.ev_lb_start_charging"
 
+_BASE_CONFIG = {
+    CONF_POWER_METER_ENTITY: POWER_METER,
+    CONF_VOLTAGE: 230.0,
+    CONF_MAX_SERVICE_CURRENT: 32.0,
+}
+
 
 # -----------------------------------------------------------------------
 # Shared fixtures
@@ -58,9 +64,7 @@ def mock_config_entry_with_actions() -> MockConfigEntry:
     return MockConfigEntry(
         domain=DOMAIN,
         data={
-            CONF_POWER_METER_ENTITY: POWER_METER,
-            CONF_VOLTAGE: 230.0,
-            CONF_MAX_SERVICE_CURRENT: 32.0,
+            **_BASE_CONFIG,
             CONF_ACTION_SET_CURRENT: SET_CURRENT_SCRIPT,
             CONF_ACTION_STOP_CHARGING: STOP_CHARGING_SCRIPT,
             CONF_ACTION_START_CHARGING: START_CHARGING_SCRIPT,
@@ -74,11 +78,7 @@ def mock_config_entry_no_actions() -> MockConfigEntry:
     """Create a mock config entry with no action scripts configured."""
     return MockConfigEntry(
         domain=DOMAIN,
-        data={
-            CONF_POWER_METER_ENTITY: POWER_METER,
-            CONF_VOLTAGE: 230.0,
-            CONF_MAX_SERVICE_CURRENT: 32.0,
-        },
+        data={**_BASE_CONFIG},
         title="EV Load Balancing",
     )
 
@@ -95,9 +95,7 @@ def mock_config_entry_fallback() -> MockConfigEntry:
     return MockConfigEntry(
         domain=DOMAIN,
         data={
-            CONF_POWER_METER_ENTITY: POWER_METER,
-            CONF_VOLTAGE: 230.0,
-            CONF_MAX_SERVICE_CURRENT: 32.0,
+            **_BASE_CONFIG,
             CONF_UNAVAILABLE_BEHAVIOR: UNAVAILABLE_BEHAVIOR_SET_CURRENT,
             CONF_UNAVAILABLE_FALLBACK_CURRENT: 10.0,
         },
@@ -111,9 +109,7 @@ def mock_config_entry_ignore() -> MockConfigEntry:
     return MockConfigEntry(
         domain=DOMAIN,
         data={
-            CONF_POWER_METER_ENTITY: POWER_METER,
-            CONF_VOLTAGE: 230.0,
-            CONF_MAX_SERVICE_CURRENT: 32.0,
+            **_BASE_CONFIG,
             CONF_UNAVAILABLE_BEHAVIOR: UNAVAILABLE_BEHAVIOR_IGNORE,
         },
         title="EV Load Balancing",
