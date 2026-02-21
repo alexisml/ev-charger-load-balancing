@@ -1,0 +1,29 @@
+name: Type Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  type-check:
+    name: Python type check (Pyright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Pyright
+        run: pip install pyright==1.1.408
+
+      - name: Run Pyright
+        run: pyright

@@ -1,6 +1,8 @@
 [![Unit Tests](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/alexisml/ha-ev-charger-balancer/graph/badge.svg?token=GOO252H72J)](https://codecov.io/gh/alexisml/ha-ev-charger-balancer)
 [![CodeQL](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/codeql.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/codeql.yml)
+[![Type Check](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/type-check.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/type-check.yml)
+[![Spell Check](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/spell-check.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/spell-check.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/alexisml/ha-ev-charger-balancer/blob/main/.github/dependabot.yml)
 
 # EV Charger Load Balancing (HACS)
@@ -190,6 +192,22 @@ Available current pool
 
 - When adding plans or design docs, follow the docs rule above.
 - For code contributions, open PRs against the repository default branch and reference the relevant docs under `docs/development-memories/`.
+
+### Running CI checks locally
+
+**Type checking** (requires `pyright`):
+```bash
+pip install pyright
+pyright
+```
+
+**Spell checking** (requires `codespell`):
+```bash
+pip install codespell
+codespell
+```
+
+Both tools read their configuration from `pyrightconfig.json` and `pyproject.toml` respectively at the repo root.
 
 For the full research plan, design decisions, and lessons learned, see:
 - [`docs/documentation/milestones/01-2026-02-19-mvp-plan.md`](docs/documentation/milestones/01-2026-02-19-mvp-plan.md)

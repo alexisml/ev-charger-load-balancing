@@ -45,7 +45,7 @@ from .const import (
 )
 
 
-class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):
+class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGeneralTypeIssues,reportCallIssue]  # both needed: HA ConfigFlow domain= keyword is unknown without HA type stubs
     """Handle a config flow for EV Charger Load Balancing."""
 
     VERSION = 1
