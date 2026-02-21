@@ -52,10 +52,12 @@ from .const import (
     REASON_PARAMETER_CHANGE,
     REASON_POWER_METER_UPDATE,
     SIGNAL_UPDATE_FMT,
+    STATE_ACTIVE,
     STATE_ADJUSTING,
-    STATE_CHARGING,
     STATE_DISABLED,
-    STATE_METER_UNAVAILABLE,
+    STATE_METER_UNAVAILABLE_FALLBACK,
+    STATE_METER_UNAVAILABLE_IGNORED,
+    STATE_METER_UNAVAILABLE_STOPPED,
     STATE_RAMP_UP_HOLD,
     STATE_STOPPED,
     UNAVAILABLE_BEHAVIOR_IGNORE,
@@ -273,6 +275,9 @@ class EvLoadBalancerCoordinator:
         """
         fallback = self._resolve_fallback()
         if fallback is None:
+            # Ignore mode — keep last value but update the balancer state
+            self.balancer_state = STATE_METER_UNAVAILABLE_IGNORED
+            async_dispatcher_send(self.hass, self.signal_update)
             return
         self._update_and_notify(0.0, fallback, REASON_FALLBACK_UNAVAILABLE)
 
@@ -432,23 +437,26 @@ class EvLoadBalancerCoordinator:
 
         Maps to the charger state transitions described in the README:
         - **disabled**: load balancing switch is off
-        - **meter_unavailable**: power meter is unavailable (fallback active)
-        - **stopped**: charger is off (target = 0 A)
+        - **meter_unavailable_stopped**: meter unavailable, charging stopped (0 A)
+        - **meter_unavailable_fallback**: meter unavailable, fallback current applied
+        - **stopped**: charger target is 0 A (normal overload)
         - **ramp_up_hold**: increase blocked by cooldown
         - **adjusting**: current changed this cycle
-        - **charging**: active and steady (current unchanged)
+        - **active**: target current > 0 and unchanged (steady state)
         """
         if not self.enabled:
             return STATE_DISABLED
         if reason == REASON_FALLBACK_UNAVAILABLE:
-            return STATE_METER_UNAVAILABLE
+            if self.current_set_a > 0:
+                return STATE_METER_UNAVAILABLE_FALLBACK
+            return STATE_METER_UNAVAILABLE_STOPPED
         if not self.active:
             return STATE_STOPPED
         if ramp_up_held:
             return STATE_RAMP_UP_HOLD
         if self.current_set_a != prev_current or not prev_active:
             return STATE_ADJUSTING
-        return STATE_CHARGING
+        return STATE_ACTIVE
 
     # ------------------------------------------------------------------
     # Event notifications and persistent notifications

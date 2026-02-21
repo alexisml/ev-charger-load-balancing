@@ -64,14 +64,16 @@ WARNING Action set_current failed via script.ev_set_current: Service not found
 
 The integration exposes a **Balancer state** diagnostic sensor (`sensor.*_balancer_state`) that shows the current operational state. This maps to the charger state machine described in the README:
 
-| State               | Meaning                                                    |
-|---------------------|------------------------------------------------------------|
-| `stopped`           | Charger is off (target = 0 A)                              |
-| `charging`          | Active, steady state (current unchanged this cycle)        |
-| `adjusting`         | Active, current changed this cycle                         |
-| `ramp_up_hold`      | Increase blocked by ramp-up cooldown                       |
-| `meter_unavailable` | Power meter is unavailable (fallback behavior active)      |
-| `disabled`          | Load balancing switch is off                               |
+| State                        | Meaning                                                    |
+|------------------------------|------------------------------------------------------------|
+| `stopped`                    | Target current is 0 A (overload or initial state)          |
+| `active`                     | Target current > 0 and unchanged this cycle (steady state) |
+| `adjusting`                  | Target current changed this cycle                          |
+| `ramp_up_hold`               | Increase blocked by ramp-up cooldown                       |
+| `meter_unavailable_stopped`  | Power meter unavailable — charging stopped (0 A)           |
+| `meter_unavailable_fallback` | Power meter unavailable — fallback current applied         |
+| `meter_unavailable_ignored`  | Power meter unavailable — keeping last value               |
+| `disabled`                   | Load balancing switch is off                               |
 
 Use this sensor in automations or dashboards to monitor the integration's behavior without enabling debug logs.
 

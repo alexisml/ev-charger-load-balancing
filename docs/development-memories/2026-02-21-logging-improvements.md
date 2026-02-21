@@ -29,11 +29,13 @@ A new diagnostic sensor (`sensor.*_balancer_state`) shows the operational state 
 
 | State | Meaning |
 |-------|---------|
-| `stopped` | Charger off (target = 0 A) |
-| `charging` | Active, steady state |
-| `adjusting` | Active, current changed this cycle |
+| `stopped` | Target current is 0 A (overload or initial) |
+| `active` | Target current > 0 and unchanged (steady state) |
+| `adjusting` | Target current changed this cycle |
 | `ramp_up_hold` | Increase blocked by cooldown |
-| `meter_unavailable` | Power meter unavailable |
+| `meter_unavailable_stopped` | Meter unavailable — stopped (0 A) |
+| `meter_unavailable_fallback` | Meter unavailable — fallback current applied |
+| `meter_unavailable_ignored` | Meter unavailable — keeping last value |
 | `disabled` | Load balancing switch off |
 
 ### Key changes

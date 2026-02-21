@@ -156,7 +156,9 @@ class EvLbBalancerStateSensor(RestoreSensor):
     """Diagnostic sensor showing the balancer's current operational state.
 
     Maps to the charger state transitions in the README diagrams:
-    stopped, charging, adjusting, ramp_up_hold, meter_unavailable, disabled.
+    stopped, active, adjusting, ramp_up_hold,
+    meter_unavailable_stopped, meter_unavailable_fallback,
+    meter_unavailable_ignored, disabled.
     """
 
     _attr_has_entity_name = True

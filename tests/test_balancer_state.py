@@ -5,13 +5,15 @@ mapping to the charger state transitions in the README diagrams.
 
 Tests cover:
 - Sensor starts in 'stopped' state
-- Transitions to 'charging' on first power meter event with headroom
+- Transitions to 'adjusting' on first power meter event with headroom
+- Shows 'active' when target current > 0 and unchanged (steady state)
 - Shows 'adjusting' when current changes
 - Shows 'ramp_up_hold' when cooldown blocks an increase
-- Shows 'meter_unavailable' when power meter goes unavailable in stop mode
+- Shows 'meter_unavailable_stopped' when meter goes unavailable in stop mode
+- Shows 'meter_unavailable_fallback' when meter goes unavailable in set_current mode
+- Shows 'meter_unavailable_ignored' when meter goes unavailable in ignore mode
 - Shows 'disabled' when load balancing is turned off
 - Shows 'stopped' when overload stops charging
-- Shows 'charging' in steady state (same current, still active)
 """
 
 from homeassistant.core import HomeAssistant
@@ -20,10 +22,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_lb.const import (
     DOMAIN,
+    STATE_ACTIVE,
     STATE_ADJUSTING,
-    STATE_CHARGING,
     STATE_DISABLED,
-    STATE_METER_UNAVAILABLE,
+    STATE_METER_UNAVAILABLE_FALLBACK,
+    STATE_METER_UNAVAILABLE_IGNORED,
+    STATE_METER_UNAVAILABLE_STOPPED,
     STATE_RAMP_UP_HOLD,
     STATE_STOPPED,
 )
@@ -57,10 +61,10 @@ class TestBalancerStateSensor:
 
         assert coordinator.balancer_state == STATE_ADJUSTING
 
-    async def test_steady_state_is_charging(
+    async def test_steady_state_is_active(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """When active and current is unchanged, state is 'charging'."""
+        """When target current > 0 and unchanged, state is 'active'."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
@@ -76,7 +80,7 @@ class TestBalancerStateSensor:
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
 
-        assert coordinator.balancer_state == STATE_CHARGING
+        assert coordinator.balancer_state == STATE_ACTIVE
 
     async def test_adjusting_on_current_change(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
@@ -131,17 +135,41 @@ class TestBalancerStateSensor:
 
         assert coordinator.balancer_state == STATE_STOPPED
 
-    async def test_meter_unavailable_state(
+    async def test_meter_unavailable_stop_mode(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """When power meter goes unavailable (stop mode), state is 'meter_unavailable'."""
+        """When power meter goes unavailable in stop mode, state is 'meter_unavailable_stopped'."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
         hass.states.async_set(POWER_METER, "unavailable")
         await hass.async_block_till_done()
 
-        assert coordinator.balancer_state == STATE_METER_UNAVAILABLE
+        assert coordinator.balancer_state == STATE_METER_UNAVAILABLE_STOPPED
+
+    async def test_meter_unavailable_fallback_mode(
+        self, hass: HomeAssistant, mock_config_entry_fallback: MockConfigEntry
+    ) -> None:
+        """When power meter goes unavailable in set_current mode, state is 'meter_unavailable_fallback'."""
+        await setup_integration(hass, mock_config_entry_fallback)
+        coordinator = hass.data[DOMAIN][mock_config_entry_fallback.entry_id]["coordinator"]
+
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+
+        assert coordinator.balancer_state == STATE_METER_UNAVAILABLE_FALLBACK
+
+    async def test_meter_unavailable_ignore_mode(
+        self, hass: HomeAssistant, mock_config_entry_ignore: MockConfigEntry
+    ) -> None:
+        """When power meter goes unavailable in ignore mode, state is 'meter_unavailable_ignored'."""
+        await setup_integration(hass, mock_config_entry_ignore)
+        coordinator = hass.data[DOMAIN][mock_config_entry_ignore.entry_id]["coordinator"]
+
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+
+        assert coordinator.balancer_state == STATE_METER_UNAVAILABLE_IGNORED
 
     async def test_disabled_state(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
