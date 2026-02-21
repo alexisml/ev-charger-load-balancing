@@ -33,10 +33,17 @@ A new diagnostic sensor (`sensor.*_balancer_state`) shows the operational state 
 | `active` | Target current > 0 and unchanged (steady state) |
 | `adjusting` | Target current changed this cycle |
 | `ramp_up_hold` | Increase blocked by cooldown |
-| `meter_unavailable_stopped` | Meter unavailable — stopped (0 A) |
-| `meter_unavailable_fallback` | Meter unavailable — fallback current applied |
-| `meter_unavailable_ignored` | Meter unavailable — keeping last value |
 | `disabled` | Load balancing switch off |
+
+### Meter health and fallback sensors
+
+Meter status and fallback info are separate from the balancer state, tracked by dedicated sensors:
+
+| Entity | Type | Purpose |
+|--------|------|---------|
+| `binary_sensor.*_meter_status` | Connectivity | On = meter healthy, Off = unavailable |
+| `binary_sensor.*_fallback_active` | Problem | On = fallback in effect, Off = normal |
+| `sensor.*_configured_fallback` | Diagnostic | Shows configured behavior: stop/ignore/set_current |
 
 ### Key changes
 

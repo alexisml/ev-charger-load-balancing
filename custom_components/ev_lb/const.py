@@ -69,9 +69,6 @@ STATE_STOPPED = "stopped"
 STATE_ACTIVE = "active"
 STATE_ADJUSTING = "adjusting"
 STATE_RAMP_UP_HOLD = "ramp_up_hold"
-STATE_METER_UNAVAILABLE_STOPPED = "meter_unavailable_stopped"
-STATE_METER_UNAVAILABLE_IGNORED = "meter_unavailable_ignored"
-STATE_METER_UNAVAILABLE_FALLBACK = "meter_unavailable_fallback"
 STATE_DISABLED = "disabled"
 
 # Event types for notable conditions

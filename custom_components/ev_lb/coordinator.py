@@ -55,9 +55,6 @@ from .const import (
     STATE_ACTIVE,
     STATE_ADJUSTING,
     STATE_DISABLED,
-    STATE_METER_UNAVAILABLE_FALLBACK,
-    STATE_METER_UNAVAILABLE_IGNORED,
-    STATE_METER_UNAVAILABLE_STOPPED,
     STATE_RAMP_UP_HOLD,
     STATE_STOPPED,
     UNAVAILABLE_BEHAVIOR_IGNORE,
@@ -108,6 +105,9 @@ class EvLoadBalancerCoordinator:
         self.active: bool = False
         self.last_action_reason: str = ""
         self.balancer_state: str = STATE_STOPPED
+        self.meter_healthy: bool = True
+        self.fallback_active: bool = False
+        self.configured_fallback: str = self._unavailable_behavior
 
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None
@@ -199,6 +199,9 @@ class EvLoadBalancerCoordinator:
             )
             return
 
+        # Meter recovered — clear fallback flags
+        self.meter_healthy = True
+        self.fallback_active = False
         self._recompute(house_power_w)
 
     # ------------------------------------------------------------------
@@ -273,10 +276,11 @@ class EvLoadBalancerCoordinator:
         mode keeps the last computed value; all other modes update the
         charger current via ``_update_and_notify``.
         """
+        self.meter_healthy = False
+        self.fallback_active = True
         fallback = self._resolve_fallback()
         if fallback is None:
-            # Ignore mode — keep last value but update the balancer state
-            self.balancer_state = STATE_METER_UNAVAILABLE_IGNORED
+            # Ignore mode — keep last value, just update sensor state
             async_dispatcher_send(self.hass, self.signal_update)
             return
         self._update_and_notify(0.0, fallback, REASON_FALLBACK_UNAVAILABLE)
@@ -437,19 +441,15 @@ class EvLoadBalancerCoordinator:
 
         Maps to the charger state transitions described in the README:
         - **disabled**: load balancing switch is off
-        - **meter_unavailable_stopped**: meter unavailable, charging stopped (0 A)
-        - **meter_unavailable_fallback**: meter unavailable, fallback current applied
-        - **stopped**: charger target is 0 A (normal overload)
+        - **stopped**: charger target is 0 A
         - **ramp_up_hold**: increase blocked by cooldown
         - **adjusting**: current changed this cycle
         - **active**: target current > 0 and unchanged (steady state)
+
+        Meter health and fallback status are tracked by separate sensors.
         """
         if not self.enabled:
             return STATE_DISABLED
-        if reason == REASON_FALLBACK_UNAVAILABLE:
-            if self.current_set_a > 0:
-                return STATE_METER_UNAVAILABLE_FALLBACK
-            return STATE_METER_UNAVAILABLE_STOPPED
         if not self.active:
             return STATE_STOPPED
         if ramp_up_held:

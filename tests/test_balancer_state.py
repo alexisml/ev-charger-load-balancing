@@ -1,19 +1,13 @@
-"""Tests for the balancer state diagnostic sensor.
+"""Tests for balancer state sensor and meter health/fallback sensors.
 
-The balancer state sensor shows the operational state of the coordinator,
-mapping to the charger state transitions in the README diagrams.
+The balancer state sensor shows the operational state of the coordinator.
+Meter health and fallback status are tracked by dedicated sensors.
 
 Tests cover:
-- Sensor starts in 'stopped' state
-- Transitions to 'adjusting' on first power meter event with headroom
-- Shows 'active' when target current > 0 and unchanged (steady state)
-- Shows 'adjusting' when current changes
-- Shows 'ramp_up_hold' when cooldown blocks an increase
-- Shows 'meter_unavailable_stopped' when meter goes unavailable in stop mode
-- Shows 'meter_unavailable_fallback' when meter goes unavailable in set_current mode
-- Shows 'meter_unavailable_ignored' when meter goes unavailable in ignore mode
-- Shows 'disabled' when load balancing is turned off
-- Shows 'stopped' when overload stops charging
+- Balancer state: stopped, adjusting, active, ramp_up_hold, disabled
+- Meter status: healthy when reading, unhealthy when unavailable
+- Fallback active: on when meter unavailable, off when meter recovers
+- Configured fallback: reflects the config entry's unavailable_behavior
 """
 
 from homeassistant.core import HomeAssistant
@@ -25,11 +19,11 @@ from custom_components.ev_lb.const import (
     STATE_ACTIVE,
     STATE_ADJUSTING,
     STATE_DISABLED,
-    STATE_METER_UNAVAILABLE_FALLBACK,
-    STATE_METER_UNAVAILABLE_IGNORED,
-    STATE_METER_UNAVAILABLE_STOPPED,
     STATE_RAMP_UP_HOLD,
     STATE_STOPPED,
+    UNAVAILABLE_BEHAVIOR_IGNORE,
+    UNAVAILABLE_BEHAVIOR_SET_CURRENT,
+    UNAVAILABLE_BEHAVIOR_STOP,
 )
 from conftest import (
     POWER_METER,
@@ -135,41 +129,17 @@ class TestBalancerStateSensor:
 
         assert coordinator.balancer_state == STATE_STOPPED
 
-    async def test_meter_unavailable_stop_mode(
+    async def test_meter_unavailable_stop_mode_shows_stopped(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """When power meter goes unavailable in stop mode, state is 'meter_unavailable_stopped'."""
+        """When meter goes unavailable in stop mode, balancer state is 'stopped'."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
         hass.states.async_set(POWER_METER, "unavailable")
         await hass.async_block_till_done()
 
-        assert coordinator.balancer_state == STATE_METER_UNAVAILABLE_STOPPED
-
-    async def test_meter_unavailable_fallback_mode(
-        self, hass: HomeAssistant, mock_config_entry_fallback: MockConfigEntry
-    ) -> None:
-        """When power meter goes unavailable in set_current mode, state is 'meter_unavailable_fallback'."""
-        await setup_integration(hass, mock_config_entry_fallback)
-        coordinator = hass.data[DOMAIN][mock_config_entry_fallback.entry_id]["coordinator"]
-
-        hass.states.async_set(POWER_METER, "unavailable")
-        await hass.async_block_till_done()
-
-        assert coordinator.balancer_state == STATE_METER_UNAVAILABLE_FALLBACK
-
-    async def test_meter_unavailable_ignore_mode(
-        self, hass: HomeAssistant, mock_config_entry_ignore: MockConfigEntry
-    ) -> None:
-        """When power meter goes unavailable in ignore mode, state is 'meter_unavailable_ignored'."""
-        await setup_integration(hass, mock_config_entry_ignore)
-        coordinator = hass.data[DOMAIN][mock_config_entry_ignore.entry_id]["coordinator"]
-
-        hass.states.async_set(POWER_METER, "unavailable")
-        await hass.async_block_till_done()
-
-        assert coordinator.balancer_state == STATE_METER_UNAVAILABLE_IGNORED
+        assert coordinator.balancer_state == STATE_STOPPED
 
     async def test_disabled_state(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
@@ -197,3 +167,172 @@ class TestBalancerStateSensor:
         state = hass.states.get(entity_id)
         assert state is not None
         assert state.state == STATE_ADJUSTING
+
+
+# ---------------------------------------------------------------------------
+# Meter status binary sensor
+# ---------------------------------------------------------------------------
+
+
+class TestMeterStatusSensor:
+    """The meter status sensor reflects power meter health."""
+
+    async def test_meter_healthy_initially(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Meter status is on (healthy) before any unavailable event."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        assert coordinator.meter_healthy is True
+
+    async def test_meter_unhealthy_on_unavailable(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Meter status turns off when the meter becomes unavailable."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+
+        assert coordinator.meter_healthy is False
+
+    async def test_meter_recovers_on_valid_reading(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Meter status returns to on when a valid reading arrives."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+        assert coordinator.meter_healthy is False
+
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+        assert coordinator.meter_healthy is True
+
+    async def test_meter_status_entity(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """The HA binary sensor entity reflects meter health."""
+        await setup_integration(hass, mock_config_entry)
+        entity_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "meter_status")
+
+        # Initially healthy
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == "on"
+
+        # Goes unavailable
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+
+        state = hass.states.get(entity_id)
+        assert state.state == "off"
+
+
+# ---------------------------------------------------------------------------
+# Fallback active binary sensor
+# ---------------------------------------------------------------------------
+
+
+class TestFallbackActiveSensor:
+    """The fallback active sensor shows when a meter fallback is in effect."""
+
+    async def test_fallback_inactive_initially(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Fallback is not active during normal operation."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        assert coordinator.fallback_active is False
+
+    async def test_fallback_activates_on_unavailable(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Fallback becomes active when the meter goes unavailable."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+
+        assert coordinator.fallback_active is True
+
+    async def test_fallback_deactivates_on_recovery(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Fallback deactivates when a valid meter reading arrives."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+        assert coordinator.fallback_active is True
+
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+        assert coordinator.fallback_active is False
+
+    async def test_fallback_active_in_ignore_mode(
+        self, hass: HomeAssistant, mock_config_entry_ignore: MockConfigEntry
+    ) -> None:
+        """Fallback is active even in ignore mode (meter is still unavailable)."""
+        await setup_integration(hass, mock_config_entry_ignore)
+        coordinator = hass.data[DOMAIN][mock_config_entry_ignore.entry_id]["coordinator"]
+
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+
+        assert coordinator.fallback_active is True
+
+    async def test_fallback_active_entity(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """The HA binary sensor entity reflects fallback status."""
+        await setup_integration(hass, mock_config_entry)
+        entity_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "fallback_active")
+
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == "off"
+
+        hass.states.async_set(POWER_METER, "unavailable")
+        await hass.async_block_till_done()
+
+        state = hass.states.get(entity_id)
+        assert state.state == "on"
+
+
+# ---------------------------------------------------------------------------
+# Configured fallback sensor
+# ---------------------------------------------------------------------------
+
+
+class TestConfiguredFallbackSensor:
+    """The configured fallback sensor shows the user's chosen fallback behavior."""
+
+    async def test_default_configured_fallback_is_stop(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Default config entry uses 'stop' fallback behavior."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        assert coordinator.configured_fallback == UNAVAILABLE_BEHAVIOR_STOP
+
+    async def test_fallback_config_entry_shows_set_current(
+        self, hass: HomeAssistant, mock_config_entry_fallback: MockConfigEntry
+    ) -> None:
+        """Config entry with set_current fallback shows 'set_current'."""
+        await setup_integration(hass, mock_config_entry_fallback)
+        coordinator = hass.data[DOMAIN][mock_config_entry_fallback.entry_id]["coordinator"]
+        assert coordinator.configured_fallback == UNAVAILABLE_BEHAVIOR_SET_CURRENT
+
+    async def test_ignore_config_entry_shows_ignore(
+        self, hass: HomeAssistant, mock_config_entry_ignore: MockConfigEntry
+    ) -> None:
+        """Config entry with ignore fallback shows 'ignore'."""
+        await setup_integration(hass, mock_config_entry_ignore)
+        coordinator = hass.data[DOMAIN][mock_config_entry_ignore.entry_id]["coordinator"]
+        assert coordinator.configured_fallback == UNAVAILABLE_BEHAVIOR_IGNORE

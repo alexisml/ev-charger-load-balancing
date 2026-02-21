@@ -64,11 +64,20 @@
       },
       "balancer_state": {
         "name": "Balancer state"
+      },
+      "configured_fallback": {
+        "name": "Configured meter fallback"
       }
     },
     "binary_sensor": {
       "active": {
         "name": "Load balancing active"
+      },
+      "meter_status": {
+        "name": "Power meter status"
+      },
+      "fallback_active": {
+        "name": "Meter fallback active"
       }
     },
     "number": {

@@ -64,11 +64,20 @@
       },
       "balancer_state": {
         "name": "Estado del balanceador"
+      },
+      "configured_fallback": {
+        "name": "Respaldo de medidor configurado"
       }
     },
     "binary_sensor": {
       "active": {
         "name": "Balanceo de carga activo"
+      },
+      "meter_status": {
+        "name": "Estado del medidor"
+      },
+      "fallback_active": {
+        "name": "Respaldo de medidor activo"
       }
     },
     "number": {

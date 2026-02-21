@@ -64,18 +64,27 @@ WARNING Action set_current failed via script.ev_set_current: Service not found
 
 The integration exposes a **Balancer state** diagnostic sensor (`sensor.*_balancer_state`) that shows the current operational state. This maps to the charger state machine described in the README:
 
-| State                        | Meaning                                                    |
-|------------------------------|------------------------------------------------------------|
-| `stopped`                    | Target current is 0 A (overload or initial state)          |
-| `active`                     | Target current > 0 and unchanged this cycle (steady state) |
-| `adjusting`                  | Target current changed this cycle                          |
-| `ramp_up_hold`               | Increase blocked by ramp-up cooldown                       |
-| `meter_unavailable_stopped`  | Power meter unavailable — charging stopped (0 A)           |
-| `meter_unavailable_fallback` | Power meter unavailable — fallback current applied         |
-| `meter_unavailable_ignored`  | Power meter unavailable — keeping last value               |
-| `disabled`                   | Load balancing switch is off                               |
+| State         | Meaning                                                    |
+|---------------|------------------------------------------------------------|
+| `stopped`     | Target current is 0 A (overload or initial state)          |
+| `active`      | Target current > 0 and unchanged this cycle (steady state) |
+| `adjusting`   | Target current changed this cycle                          |
+| `ramp_up_hold` | Increase blocked by ramp-up cooldown                      |
+| `disabled`    | Load balancing switch is off                               |
 
-Use this sensor in automations or dashboards to monitor the integration's behavior without enabling debug logs.
+## Meter health and fallback sensors
+
+Meter health and fallback status are tracked by three dedicated sensors, separate from the balancer state:
+
+| Entity | Type | Meaning |
+|--------|------|---------|
+| `binary_sensor.*_meter_status` | Connectivity | **On** = meter is reporting valid readings. **Off** = meter is unavailable/unknown. |
+| `binary_sensor.*_fallback_active` | Problem | **On** = a meter-unavailable fallback is currently in effect. **Off** = normal operation. |
+| `sensor.*_configured_fallback` | Diagnostic | Shows the configured fallback behavior: `stop`, `ignore`, or `set_current`. |
+
+Together these three sensors answer: *Is my meter working? What fallback did I configure? Is that fallback active right now?*
+
+Use these sensors in automations or dashboards to monitor the integration's behavior without enabling debug logs.
 
 ## Logging wrapper
 
