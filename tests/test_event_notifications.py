@@ -13,6 +13,7 @@ Tests cover:
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -23,6 +24,7 @@ from custom_components.ev_lb.const import (
     CONF_UNAVAILABLE_FALLBACK_CURRENT,
     CONF_VOLTAGE,
     DOMAIN,
+    EVENT_ACTION_FAILED,
     EVENT_CHARGING_RESUMED,
     EVENT_FALLBACK_ACTIVATED,
     EVENT_METER_UNAVAILABLE,
@@ -453,3 +455,34 @@ class TestNoSpuriousEvents:
         await hass.async_block_till_done()
 
         assert len(overload_events) == 0
+
+
+# ---------------------------------------------------------------------------
+# Action failed event
+# ---------------------------------------------------------------------------
+
+
+class TestActionFailedEvent:
+    """HA event fires when a charger action script fails, enabling error-alerting automations."""
+
+    async def test_action_failed_event_fires_on_script_error(
+        self, hass: HomeAssistant, mock_config_entry_with_actions: MockConfigEntry
+    ) -> None:
+        """An event notifies automations when a charger action script raises an error."""
+        await setup_integration(hass, mock_config_entry_with_actions)
+        events = _collect_events(hass, EVENT_ACTION_FAILED)
+
+        # Make the script service call raise an error
+        with patch(
+            "homeassistant.core.ServiceRegistry.async_call",
+            side_effect=HomeAssistantError("Script not found"),
+        ):
+            # Trigger a state change that would fire actions (0→active)
+            hass.states.async_set(POWER_METER, "3000")
+            await hass.async_block_till_done()
+
+        assert len(events) >= 1
+        assert events[0]["entry_id"] == mock_config_entry_with_actions.entry_id
+        assert events[0]["action_name"] in ("start_charging", "set_current")
+        assert "error" in events[0]
+        assert "Script not found" in events[0]["error"]

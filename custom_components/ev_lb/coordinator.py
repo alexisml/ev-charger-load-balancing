@@ -40,6 +40,7 @@ from .const import (
     DEFAULT_RAMP_UP_TIME,
     DEFAULT_UNAVAILABLE_BEHAVIOR,
     DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
+    EVENT_ACTION_FAILED,
     EVENT_CHARGING_RESUMED,
     EVENT_FALLBACK_ACTIVATED,
     EVENT_METER_UNAVAILABLE,
@@ -565,4 +566,13 @@ class EvLoadBalancerCoordinator:
                 action_name,
                 entity_id,
                 exc,
+            )
+            self.hass.bus.async_fire(
+                EVENT_ACTION_FAILED,
+                {
+                    "entry_id": self.entry.entry_id,
+                    "action_name": action_name,
+                    "entity_id": entity_id,
+                    "error": str(exc),
+                },
             )

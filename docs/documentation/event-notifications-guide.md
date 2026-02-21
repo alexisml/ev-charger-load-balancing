@@ -6,7 +6,7 @@ This guide explains how to use the **event notifications** fired by the EV Charg
 
 The integration fires standard Home Assistant bus events when notable conditions occur. You can listen to these events in automations, scripts, or Node-RED and trigger any action — mobile notifications, flashing a light, logging to a file, etc.
 
-Four event types are available:
+Five event types are available:
 
 | Event type | When it fires | Persistent notification |
 |---|---|---|
@@ -14,6 +14,7 @@ Four event types are available:
 | `ev_lb_overload_stop` | Household load exceeds the service limit and charging is stopped | ✅ Created |
 | `ev_lb_fallback_activated` | Power meter becomes unavailable and fallback current is applied (set-current mode) | ✅ Created |
 | `ev_lb_charging_resumed` | Charging resumes after being stopped | ❌ (dismisses overload notification) |
+| `ev_lb_action_failed` | A charger action script fails | ❌ |
 
 ---
 
@@ -58,6 +59,17 @@ Fired when charging resumes from a stopped state (0 A → > 0 A).
 |---|---|---|
 | `entry_id` | string | Config entry ID |
 | `current_a` | float | New charging current (A) |
+
+### `ev_lb_action_failed`
+
+Fired when a configured charger action script raises an error during execution.
+
+| Field | Type | Description |
+|---|---|---|
+| `entry_id` | string | Config entry ID |
+| `action_name` | string | Name of the failed action (`set_current`, `stop_charging`, or `start_charging`) |
+| `entity_id` | string | Entity ID of the script that failed |
+| `error` | string | Error message from the failed script call |
 
 ---
 
@@ -163,6 +175,26 @@ automation:
             push:
               sound: default
               badge: 1
+```
+
+### Mobile notification on action script failure
+
+Send a push notification when a charger action script fails, so you can investigate broken scripts:
+
+```yaml
+automation:
+  - alias: "EV charger action failed"
+    trigger:
+      - platform: event
+        event_type: ev_lb_action_failed
+    action:
+      - action: notify.mobile_app_my_phone
+        data:
+          title: "EV Charger — Script Failed"
+          message: >
+            Action {{ trigger.event.data.action_name }} failed
+            ({{ trigger.event.data.entity_id }}):
+            {{ trigger.event.data.error }}
 ```
 
 ---
