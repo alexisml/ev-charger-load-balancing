@@ -55,6 +55,15 @@ MAX_CHARGER_CURRENT = 80.0
 MIN_EV_CURRENT_MIN = 1.0
 MIN_EV_CURRENT_MAX = 32.0
 
+# Service name
+SERVICE_SET_LIMIT = "set_limit"
+
+# Diagnostic: reason for the last balancer action
+REASON_POWER_METER_UPDATE = "power_meter_update"
+REASON_MANUAL_OVERRIDE = "manual_override"
+REASON_FALLBACK_UNAVAILABLE = "fallback_unavailable"
+REASON_PARAMETER_CHANGE = "parameter_change"
+
 
 def get_device_info(entry: ConfigEntry) -> DeviceInfo:
     """Return shared DeviceInfo for all entities in a config entry."""

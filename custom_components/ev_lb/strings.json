@@ -58,6 +58,9 @@
       },
       "available_current": {
         "name": "Available current"
+      },
+      "last_action_reason": {
+        "name": "Last action reason"
       }
     },
     "binary_sensor": {

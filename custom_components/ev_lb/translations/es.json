@@ -58,6 +58,9 @@
       },
       "available_current": {
         "name": "Corriente disponible"
+      },
+      "last_action_reason": {
+        "name": "Razón de la última acción"
       }
     },
     "binary_sensor": {

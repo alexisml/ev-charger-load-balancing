@@ -16,10 +16,7 @@ Tests cover:
 - Normal computation resumes when meter recovers from unavailable
 """
 
-import pytest
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -34,49 +31,7 @@ from custom_components.ev_lb.const import (
     UNAVAILABLE_BEHAVIOR_SET_CURRENT,
     UNAVAILABLE_BEHAVIOR_STOP,
 )
-
-POWER_METER = "sensor.house_power_w"
-
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    """Enable custom integrations in all tests."""
-    yield
-
-
-@pytest.fixture
-def mock_config_entry() -> MockConfigEntry:
-    """Create a mock config entry with default config."""
-    return MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_POWER_METER_ENTITY: POWER_METER,
-            CONF_VOLTAGE: 230.0,
-            CONF_MAX_SERVICE_CURRENT: 32.0,
-        },
-        title="EV Load Balancing",
-    )
-
-
-async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
-    """Set up the integration and create the power meter sensor."""
-    hass.states.async_set(POWER_METER, "0")
-    entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert entry.state is ConfigEntryState.LOADED
-
-
-def _get_entity_id(
-    hass: HomeAssistant, entry: MockConfigEntry, platform: str, suffix: str
-) -> str:
-    """Look up entity_id from the entity registry."""
-    ent_reg = er.async_get(hass)
-    entity_id = ent_reg.async_get_entity_id(
-        platform, DOMAIN, f"{entry.entry_id}_{suffix}"
-    )
-    assert entity_id is not None
-    return entity_id
+from conftest import POWER_METER, setup_integration, get_entity_id
 
 
 # ---------------------------------------------------------------------------
@@ -91,14 +46,14 @@ class TestBasicTargetComputation:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Charger receives available headroom when it is within safe limits."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         # 5 kW house load at 230 V → ~21.7 A draw → headroom = 32 - 21.7 = 10.3
         # Starting from 0 A, target = 0 + 10.3 = 10.3 → floored to 10 A
         hass.states.async_set(POWER_METER, "5000")
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
         state = hass.states.get(current_set_id)
@@ -108,10 +63,10 @@ class TestBasicTargetComputation:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Charger is capped at its maximum even when headroom exceeds it."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         # Lower max charger current to 16 A so capping is clearly visible
-        max_current_id = _get_entity_id(
+        max_current_id = get_entity_id(
             hass, mock_config_entry, "number", "max_charger_current"
         )
         await hass.services.async_call(
@@ -125,7 +80,7 @@ class TestBasicTargetComputation:
         hass.states.async_set(POWER_METER, "100")
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
         state = hass.states.get(current_set_id)
@@ -135,13 +90,13 @@ class TestBasicTargetComputation:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Available current sensor reflects the computed headroom."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         # 3000 W at 230 V → 13.04 A → headroom = 32 - 13.04 = 18.96
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
 
-        available_id = _get_entity_id(
+        available_id = get_entity_id(
             hass, mock_config_entry, "sensor", "available_current"
         )
         state = hass.states.get(available_id)
@@ -151,12 +106,12 @@ class TestBasicTargetComputation:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Active binary sensor turns on when the charger receives current."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         hass.states.async_set(POWER_METER, "5000")
         await hass.async_block_till_done()
 
-        active_id = _get_entity_id(
+        active_id = get_entity_id(
             hass, mock_config_entry, "binary_sensor", "active"
         )
         state = hass.states.get(active_id)
@@ -175,16 +130,16 @@ class TestOverloadStopsCharging:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Charging stops when total household load exceeds the service limit."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         # 9000 W at 230 V ≈ 39.1 A > 32 A service limit → negative headroom
         hass.states.async_set(POWER_METER, "9000")
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
-        active_id = _get_entity_id(
+        active_id = get_entity_id(
             hass, mock_config_entry, "binary_sensor", "active"
         )
         assert float(hass.states.get(current_set_id).state) == 0.0
@@ -194,13 +149,13 @@ class TestOverloadStopsCharging:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Charging stops when available headroom is below minimum EV current (6 A default)."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         # 6500 W at 230 V ≈ 28.3 A → headroom = 32 - 28.3 = 3.7 A < 6 A min
         hass.states.async_set(POWER_METER, "6500")
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
         assert float(hass.states.get(current_set_id).state) == 0.0
@@ -218,14 +173,14 @@ class TestInstantReduction:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """When household load increases, charger current drops on the next meter event."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         # Step 1: moderate load → charger gets some current
         # 3000 W at 230 V → available = 18.96, target = 0 + 18.96 → 18 A
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
         first_value = float(hass.states.get(current_set_id).state)
@@ -253,7 +208,7 @@ class TestRampUpCooldown:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Charger current is held after a reduction while cooldown is active."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         coordinator._ramp_up_time_s = 30.0
 
@@ -269,7 +224,7 @@ class TestRampUpCooldown:
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
         initial = float(hass.states.get(current_set_id).state)
@@ -293,7 +248,7 @@ class TestRampUpCooldown:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Charger current can increase once the cooldown period has elapsed."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         coordinator._ramp_up_time_s = 30.0
 
@@ -308,7 +263,7 @@ class TestRampUpCooldown:
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
         initial = float(hass.states.get(current_set_id).state)
@@ -341,12 +296,12 @@ class TestEnabledSwitch:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Power meter changes are ignored when load balancing is disabled."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
-        switch_id = _get_entity_id(
+        switch_id = get_entity_id(
             hass, mock_config_entry, "switch", "enabled"
         )
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
 
@@ -365,12 +320,12 @@ class TestEnabledSwitch:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Load balancing resumes when the switch is re-enabled."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
-        switch_id = _get_entity_id(
+        switch_id = get_entity_id(
             hass, mock_config_entry, "switch", "enabled"
         )
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
 
@@ -401,9 +356,9 @@ class TestPowerMeterEdgeCases:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Unavailable power meter triggers fallback to configured current (default 0 A)."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
 
@@ -421,9 +376,9 @@ class TestPowerMeterEdgeCases:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Unknown power meter triggers fallback to configured current (default 0 A)."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
 
@@ -440,9 +395,9 @@ class TestPowerMeterEdgeCases:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Non-numeric power meter state is ignored."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
 
@@ -469,12 +424,12 @@ class TestRuntimeParameterChanges:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Lowering the max charger current immediately caps the target without a new meter event."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
-        max_current_id = _get_entity_id(
+        max_current_id = get_entity_id(
             hass, mock_config_entry, "number", "max_charger_current"
         )
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
 
@@ -499,12 +454,12 @@ class TestRuntimeParameterChanges:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Raising the min EV current threshold immediately stops charging without a new meter event."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
-        min_current_id = _get_entity_id(
+        min_current_id = get_entity_id(
             hass, mock_config_entry, "number", "min_ev_current"
         )
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
 
@@ -534,12 +489,12 @@ class TestRuntimeParameterChanges:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Re-enabling the switch immediately recomputes from the current power meter value."""
-        await _setup(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
-        switch_id = _get_entity_id(
+        switch_id = get_entity_id(
             hass, mock_config_entry, "switch", "enabled"
         )
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry, "sensor", "current_set"
         )
 
@@ -596,8 +551,8 @@ class TestUnavailableBehaviorStop:
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(hass, entry, "sensor", "current_set")
-        active_id = _get_entity_id(hass, entry, "binary_sensor", "active")
+        current_set_id = get_entity_id(hass, entry, "sensor", "current_set")
+        active_id = get_entity_id(hass, entry, "binary_sensor", "active")
 
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
@@ -631,8 +586,8 @@ class TestUnavailableBehaviorIgnore:
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(hass, entry, "sensor", "current_set")
-        active_id = _get_entity_id(hass, entry, "binary_sensor", "active")
+        current_set_id = get_entity_id(hass, entry, "sensor", "current_set")
+        active_id = get_entity_id(hass, entry, "binary_sensor", "active")
 
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
@@ -669,7 +624,7 @@ class TestUnavailableBehaviorSetCurrent:
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(hass, entry, "sensor", "current_set")
+        current_set_id = get_entity_id(hass, entry, "sensor", "current_set")
 
         # Normal: target = 10 A (5000 W at 230 V)
         hass.states.async_set(POWER_METER, "5000")
@@ -701,8 +656,8 @@ class TestUnavailableBehaviorSetCurrent:
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(hass, entry, "sensor", "current_set")
-        active_id = _get_entity_id(hass, entry, "binary_sensor", "active")
+        current_set_id = get_entity_id(hass, entry, "sensor", "current_set")
+        active_id = get_entity_id(hass, entry, "binary_sensor", "active")
 
         # Normal: target = 18 A (3000 W at 230 V)
         hass.states.async_set(POWER_METER, "3000")
@@ -739,7 +694,7 @@ class TestMeterRecovery:
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(hass, entry, "sensor", "current_set")
+        current_set_id = get_entity_id(hass, entry, "sensor", "current_set")
 
         # Normal operation
         hass.states.async_set(POWER_METER, "3000")

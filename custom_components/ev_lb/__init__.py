@@ -1,10 +1,18 @@
 """EV Charger Load Balancing integration for Home Assistant."""
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+import voluptuous as vol
 
-from .const import DOMAIN, PLATFORMS
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, ServiceCall, callback
+
+from .const import DOMAIN, PLATFORMS, SERVICE_SET_LIMIT
 from .coordinator import EvLoadBalancerCoordinator
+
+SERVICE_SET_LIMIT_SCHEMA = vol.Schema(
+    {
+        vol.Required("current_a"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    }
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -23,7 +31,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
+    _register_services(hass)
+
     return True
+
+
+@callback
+def _register_services(hass: HomeAssistant) -> None:
+    """Register the ev_lb.set_limit service (once per domain)."""
+    if hass.services.has_service(DOMAIN, SERVICE_SET_LIMIT):
+        return
+
+    @callback
+    def handle_set_limit(call: ServiceCall) -> None:
+        """Handle ev_lb.set_limit service call.
+
+        Applies the requested current to every loaded coordinator.
+        In the current single-charger architecture there is exactly one.
+        """
+        current_a = call.data["current_a"]
+        for entry_data in hass.data[DOMAIN].values():
+            coordinator: EvLoadBalancerCoordinator = entry_data["coordinator"]
+            coordinator.manual_set_limit(current_a)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_LIMIT,
+        handle_set_limit,
+        schema=SERVICE_SET_LIMIT_SCHEMA,
+    )
 
 
 async def _async_options_updated(
@@ -42,4 +78,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+
+    # Unregister services when no entries remain
+    if not hass.data[DOMAIN]:
+        hass.services.async_remove(DOMAIN, SERVICE_SET_LIMIT)
+
     return unload_ok

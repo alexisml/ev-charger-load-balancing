@@ -14,9 +14,7 @@ Tests cover:
 """
 
 import pytest
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -27,74 +25,16 @@ from custom_components.ev_lb.const import (
     CONF_ACTION_SET_CURRENT,
     CONF_ACTION_START_CHARGING,
     CONF_ACTION_STOP_CHARGING,
-    CONF_MAX_SERVICE_CURRENT,
-    CONF_POWER_METER_ENTITY,
-    CONF_VOLTAGE,
     DOMAIN,
 )
-
-POWER_METER = "sensor.house_power_w"
-SET_CURRENT_SCRIPT = "script.ev_lb_set_current"
-STOP_CHARGING_SCRIPT = "script.ev_lb_stop_charging"
-START_CHARGING_SCRIPT = "script.ev_lb_start_charging"
-
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    """Enable custom integrations in all tests."""
-    yield
-
-
-@pytest.fixture
-def mock_config_entry_with_actions() -> MockConfigEntry:
-    """Create a mock config entry with all three action scripts configured."""
-    return MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_POWER_METER_ENTITY: POWER_METER,
-            CONF_VOLTAGE: 230.0,
-            CONF_MAX_SERVICE_CURRENT: 32.0,
-            CONF_ACTION_SET_CURRENT: SET_CURRENT_SCRIPT,
-            CONF_ACTION_STOP_CHARGING: STOP_CHARGING_SCRIPT,
-            CONF_ACTION_START_CHARGING: START_CHARGING_SCRIPT,
-        },
-        title="EV Load Balancing",
-    )
-
-
-@pytest.fixture
-def mock_config_entry_no_actions() -> MockConfigEntry:
-    """Create a mock config entry with no action scripts configured."""
-    return MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_POWER_METER_ENTITY: POWER_METER,
-            CONF_VOLTAGE: 230.0,
-            CONF_MAX_SERVICE_CURRENT: 32.0,
-        },
-        title="EV Load Balancing",
-    )
-
-
-async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
-    """Set up the integration and create the power meter sensor."""
-    hass.states.async_set(POWER_METER, "0")
-    entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert entry.state is ConfigEntryState.LOADED
-
-
-def _get_entity_id(
-    hass: HomeAssistant, entry: MockConfigEntry, platform: str, suffix: str
-) -> str:
-    """Look up entity_id from the entity registry."""
-    ent_reg = er.async_get(hass)
-    entity_id = ent_reg.async_get_entity_id(
-        platform, DOMAIN, f"{entry.entry_id}_{suffix}"
-    )
-    assert entity_id is not None
-    return entity_id
+from conftest import (
+    POWER_METER,
+    SET_CURRENT_SCRIPT,
+    STOP_CHARGING_SCRIPT,
+    START_CHARGING_SCRIPT,
+    setup_integration,
+    get_entity_id,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +52,7 @@ class TestSetCurrentAction:
     ) -> None:
         """Charging starts when sufficient headroom becomes available from a stopped state."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
 
         # 5000 W at 230 V → headroom ≈ 10.3 → target = 10 A (from 0 → resume)
         hass.states.async_set(POWER_METER, "5000")
@@ -135,7 +75,7 @@ class TestSetCurrentAction:
     ) -> None:
         """Charger current adjusts dynamically when household load changes during active charging."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
 
         # Step 1: start charging at 18 A (3000 W at 230 V)
         hass.states.async_set(POWER_METER, "3000")
@@ -160,7 +100,7 @@ class TestSetCurrentAction:
     ) -> None:
         """Charger receives the target current as a numeric value and its identifier as text."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
 
         hass.states.async_set(POWER_METER, "5000")
         await hass.async_block_till_done()
@@ -191,7 +131,7 @@ class TestStopChargingAction:
     ) -> None:
         """Charging stops when an overload leaves insufficient headroom for even the minimum current."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
 
         # Step 1: start charging at 18 A
         hass.states.async_set(POWER_METER, "3000")
@@ -219,7 +159,7 @@ class TestStopChargingAction:
     ) -> None:
         """Charging stops when the power meter becomes unavailable to protect the circuit."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
 
         # Start charging
         hass.states.async_set(POWER_METER, "3000")
@@ -252,7 +192,7 @@ class TestResumeChargingActions:
     ) -> None:
         """Charging resumes with the target current after recovering from an overload-induced stop."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id][
             "coordinator"
         ]
@@ -303,7 +243,7 @@ class TestNoActionOnNoChange:
     ) -> None:
         """Charger is not disturbed when power conditions remain stable."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
 
         # Step 1: start charging at 18 A (3000 W)
         hass.states.async_set(POWER_METER, "3000")
@@ -324,7 +264,7 @@ class TestNoActionOnNoChange:
     ) -> None:
         """Charger remains stopped without repeated commands when overload persists."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
 
         # Step 1: overload from the start → charger is stopped
         hass.states.async_set(POWER_METER, "9000")
@@ -354,13 +294,13 @@ class TestNoActionsConfigured:
     ) -> None:
         """Target current is computed and displayed without sending charger commands when no scripts are configured."""
         calls = async_mock_service(hass, "script", "turn_on")
-        await _setup(hass, mock_config_entry_no_actions)
+        await setup_integration(hass, mock_config_entry_no_actions)
 
         # Normal operation — should compute target but make no service calls
         hass.states.async_set(POWER_METER, "5000")
         await hass.async_block_till_done()
 
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry_no_actions, "sensor", "current_set"
         )
         assert float(hass.states.get(current_set_id).state) == 10.0
@@ -383,14 +323,14 @@ class TestActionErrorHandling:
     ) -> None:
         """Integration continues computing and displaying the target current even when the charger script is broken."""
         # Do NOT mock the script service — the call will raise ServiceNotFound
-        await _setup(hass, mock_config_entry_with_actions)
+        await setup_integration(hass, mock_config_entry_with_actions)
 
         # Trigger a state change that would call start_charging + set_current
         hass.states.async_set(POWER_METER, "5000")
         await hass.async_block_till_done()
 
         # Integration should still be operational — the sensor updates
-        current_set_id = _get_entity_id(
+        current_set_id = get_entity_id(
             hass, mock_config_entry_with_actions, "sensor", "current_set"
         )
         assert float(hass.states.get(current_set_id).state) == 10.0
@@ -413,7 +353,7 @@ class TestOptionsFlow:
         mock_config_entry_no_actions: MockConfigEntry,
     ) -> None:
         """Updated charger action scripts take effect after saving options."""
-        await _setup(hass, mock_config_entry_no_actions)
+        await setup_integration(hass, mock_config_entry_no_actions)
 
         # Open options flow
         result = await hass.config_entries.options.async_init(

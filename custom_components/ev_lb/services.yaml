@@ -1,0 +1,20 @@
+set_limit:
+  name: Set charging limit
+  description: >-
+    Manually override the charger current limit. The value is clamped to the
+    charger's min/max range. If it falls below the minimum EV current, charging
+    is stopped. The override is one-shot — the next power-meter event resumes
+    automatic balancing.
+  fields:
+    current_a:
+      name: Current (A)
+      description: Target charging current in Amps.
+      required: true
+      example: 16
+      selector:
+        number:
+          min: 0
+          max: 80
+          step: 1
+          unit_of_measurement: A
+          mode: box

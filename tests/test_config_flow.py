@@ -7,7 +7,6 @@ Tests cover:
 - Single-instance protection (abort if already configured)
 """
 
-import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -23,12 +22,6 @@ from custom_components.ev_lb.const import (
     DOMAIN,
     UNAVAILABLE_BEHAVIOR_STOP,
 )
-
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    """Enable custom integrations in all tests."""
-    yield
 
 
 async def test_user_flow_success(hass: HomeAssistant) -> None:
