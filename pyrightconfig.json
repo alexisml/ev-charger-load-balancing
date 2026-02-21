@@ -1,0 +1,7 @@
+{
+  "include": ["custom_components/ev_lb", "tests"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false
+}

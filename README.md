@@ -190,6 +190,22 @@ Available current pool
 - When adding plans or design docs, follow the docs rule above.
 - For code contributions, open PRs against the repository default branch and reference the relevant docs under `docs/development-memories/`.
 
+### Running CI checks locally
+
+**Type checking** (requires `pyright`):
+```bash
+pip install pyright
+pyright
+```
+
+**Spell checking** (requires `codespell`):
+```bash
+pip install codespell
+codespell
+```
+
+Both tools read their configuration from `pyrightconfig.json` and `pyproject.toml` respectively at the repo root.
+
 For the full research plan, design decisions, and lessons learned, see:
 - [`docs/documentation/milestones/01-2026-02-19-mvp-plan.md`](docs/documentation/milestones/01-2026-02-19-mvp-plan.md)
 - [`docs/documentation/milestones/02-2026-02-19-multi-charger-plan.md`](docs/documentation/milestones/02-2026-02-19-multi-charger-plan.md)
