@@ -42,7 +42,6 @@ from .const import (
     SIGNAL_UPDATE_FMT,
     UNAVAILABLE_BEHAVIOR_IGNORE,
     UNAVAILABLE_BEHAVIOR_SET_CURRENT,
-    UNAVAILABLE_BEHAVIOR_STOP,
 )
 from .load_balancer import apply_ramp_up_limit, clamp_current, compute_available_current
 

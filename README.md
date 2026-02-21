@@ -1,8 +1,10 @@
 [![Unit Tests](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/alexisml/ha-ev-charger-balancer/graph/badge.svg?token=GOO252H72J)](https://codecov.io/gh/alexisml/ha-ev-charger-balancer)
 [![CodeQL](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/codeql.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/codeql.yml)
+[![Ruff](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/ruff.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/ruff.yml)
 [![Type Check](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/type-check.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/type-check.yml)
 [![Spell Check](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/spell-check.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/spell-check.yml)
+[![Gitleaks](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/gitleaks.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/alexisml/ha-ev-charger-balancer/blob/main/.github/dependabot.yml)
 
 # EV Charger Load Balancing (HACS)
@@ -195,6 +197,12 @@ Available current pool
 
 ### Running CI checks locally
 
+**Linting** (requires `ruff`):
+```bash
+pip install ruff
+ruff check .
+```
+
 **Type checking** (requires `pyright`):
 ```bash
 pip install pyright
@@ -208,6 +216,17 @@ codespell
 ```
 
 Both tools read their configuration from `pyrightconfig.json` and `pyproject.toml` respectively at the repo root.
+
+**Secret scanning** (requires [Gitleaks](https://github.com/gitleaks/gitleaks)):
+```bash
+# macOS
+brew install gitleaks
+# or download a release binary from https://github.com/gitleaks/gitleaks/releases
+
+gitleaks detect --source . --config .gitleaks.toml
+```
+To suppress a confirmed false positive on a specific line, append `# gitleaks:allow` to that line.
+For path-level suppressions, add an `[[allowlist.paths]]` entry in `.gitleaks.toml`.
 
 For the full research plan, design decisions, and lessons learned, see:
 - [`docs/documentation/milestones/01-2026-02-19-mvp-plan.md`](docs/documentation/milestones/01-2026-02-19-mvp-plan.md)

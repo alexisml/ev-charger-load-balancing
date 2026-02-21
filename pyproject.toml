@@ -1,3 +1,10 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+
 [tool.codespell]
 skip = ".git,.venv,dist,build,node_modules"
 ignore-words-list = "hass,ser,momento"

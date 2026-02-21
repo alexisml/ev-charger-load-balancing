@@ -14,7 +14,6 @@ Tests cover:
 The computation functions live in custom_components/ev_lb/load_balancer.py.
 """
 
-import pytest
 from custom_components.ev_lb.load_balancer import (
     VOLTAGE_DEFAULT,
     compute_available_current,
@@ -295,7 +294,8 @@ class TestPowerSensorUnavailable:
     """
 
     def test_zero_house_power_with_no_ev(self):
-        """When the app falls back to 0 W (e.g., because the power sensor is unavailable), the full service capacity is offered to the charger."""
+        """When the app falls back to 0 W (e.g., because the power sensor is unavailable),
+        the full service capacity is offered to the charger."""
         available = compute_available_current(
             house_power_w=0.0,
             max_service_a=32.0,

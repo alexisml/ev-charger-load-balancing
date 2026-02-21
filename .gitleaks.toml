@@ -1,0 +1,22 @@
+# Gitleaks configuration
+# See https://github.com/gitleaks/gitleaks for documentation.
+#
+# To suppress a false positive on a specific line, add the following comment at
+# the end of the line:
+#   # gitleaks:allow
+#
+# To add a path-level allowlist entry, add a [[allowlist.paths]] block below.
+
+title = "ha-ev-charger-balancer gitleaks config"
+
+[extend]
+# Use the default ruleset shipped with Gitleaks.
+useDefault = true
+
+[allowlist]
+description = "Global allowlists"
+paths = [
+  # Ignore lock files and vendored code.
+  '''go\.sum''',
+  '''package-lock\.json''',
+]
