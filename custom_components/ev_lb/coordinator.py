@@ -218,6 +218,8 @@ class EvLoadBalancerCoordinator:
         """
         if not self.enabled:
             _LOGGER.debug("Parameter changed but load balancing is disabled — skipping recompute")
+            self.balancer_state = STATE_DISABLED
+            async_dispatcher_send(self.hass, self.signal_update)
             return
 
         state = self.hass.states.get(self._power_meter_entity)

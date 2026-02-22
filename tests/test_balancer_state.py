@@ -38,7 +38,7 @@ class TestBalancerStateSensor:
     async def test_initial_state_is_stopped(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Sensor shows 'stopped' before any power meter events."""
+        """Balancer reports stopped state on initialization before receiving any meter readings."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         assert coordinator.balancer_state == STATE_STOPPED
@@ -157,7 +157,7 @@ class TestBalancerStateSensor:
     async def test_sensor_entity_reflects_coordinator_state(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """The HA sensor entity value matches the coordinator's balancer_state."""
+        """Balancer state sensor displays the current operational state to users in the dashboard."""
         await setup_integration(hass, mock_config_entry)
         entity_id = get_entity_id(hass, mock_config_entry, "sensor", "balancer_state")
 
@@ -180,7 +180,7 @@ class TestMeterStatusSensor:
     async def test_meter_healthy_initially(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Meter status is on (healthy) before any unavailable event."""
+        """Power meter reports healthy status on startup before any failures occur."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         assert coordinator.meter_healthy is True
@@ -188,7 +188,7 @@ class TestMeterStatusSensor:
     async def test_meter_unhealthy_on_unavailable(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Meter status turns off when the meter becomes unavailable."""
+        """Power meter status sensor reports unhealthy when meter connection is lost."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
@@ -200,7 +200,7 @@ class TestMeterStatusSensor:
     async def test_meter_recovers_on_valid_reading(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Meter status returns to on when a valid reading arrives."""
+        """Power meter status sensor reports healthy again when valid readings resume."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
@@ -215,7 +215,7 @@ class TestMeterStatusSensor:
     async def test_meter_status_entity(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """The HA binary sensor entity reflects meter health."""
+        """Power meter status binary sensor entity shows users the meter health in the dashboard."""
         await setup_integration(hass, mock_config_entry)
         entity_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "meter_status")
 
@@ -290,7 +290,7 @@ class TestFallbackActiveSensor:
     async def test_fallback_active_entity(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """The HA binary sensor entity reflects fallback status."""
+        """Fallback active binary sensor entity shows users when meter unavailable fallback is in effect."""
         await setup_integration(hass, mock_config_entry)
         entity_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "fallback_active")
 

@@ -2,7 +2,7 @@
 
 All modules import their logger from here instead of calling
 ``logging.getLogger(__name__)`` directly.  This gives us a single place
-to change the logging behaviour in the future (e.g. structured output,
+to change the logging behavior in the future (e.g. structured output,
 rate-limiting, or additional context) without touching every module.
 
 Usage::

@@ -32,7 +32,7 @@ class TestCoordinatorDebugLogs:
     async def test_recompute_logs_full_pipeline_at_debug(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry, caplog
     ) -> None:
-        """Every recompute cycle logs house power, available, target, and final values."""
+        """Users can view full computation pipeline values in debug logs on every power meter update."""
         await setup_integration(hass, mock_config_entry)
 
         with caplog.at_level(logging.DEBUG, logger="custom_components.ev_lb.coordinator"):
@@ -79,7 +79,7 @@ class TestCoordinatorDebugLogs:
     async def test_manual_override_logs_at_debug(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry, caplog
     ) -> None:
-        """Manual set_limit calls are logged at debug with requested and clamped values."""
+        """Users can see manual current override requests and actual applied values in debug logs."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
