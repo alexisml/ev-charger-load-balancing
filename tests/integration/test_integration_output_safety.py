@@ -146,7 +146,7 @@ class TestChargingCurrentExactBoundaries:
         assert float(hass.states.get(current_set_id).state) == 0.0
         assert hass.states.get(active_id).state == "off"
 
-    async def test_available_exactly_at_max_charger_caps(
+    async def test_available_exactly_at_max_charger_current_caps(
         self,
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,

@@ -421,7 +421,7 @@ class TestComputeAvailableCurrentBoundaries:
         result = compute_available_current(house_power_w=200_000.0, max_service_a=32.0)
         assert result < -800.0
 
-    def test_negative_power_export_gives_more_than_service(self):
+    def test_negative_power_export_increases_available_current(self):
         """Negative power (solar export) increases available current beyond service limit."""
         result = compute_available_current(house_power_w=-5000.0, max_service_a=32.0)
         # -(-5000)/230 = +21.7 A → available = 32 + 21.7 ≈ 53.7 A
@@ -462,8 +462,8 @@ class TestClampCurrentBoundaries:
         result = clamp_current(available_a=1000.0, max_charger_a=32.0, min_charger_a=6.0)
         assert result == 32.0
 
-    def test_fractional_below_min_after_step_flooring(self):
-        """Available current slightly above min but step-floored below min returns None."""
+    def test_fractional_step_floored_to_exactly_min(self):
+        """Available current above min is step-floored to exactly the minimum and still charges."""
         # 6.9 A with step 1.0 → floor to 6.0 → exactly at min → charge
         result = clamp_current(available_a=6.9, max_charger_a=32.0, min_charger_a=6.0, step_a=1.0)
         assert result == 6.0
