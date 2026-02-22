@@ -20,7 +20,7 @@
           "max_service_current": "Whole-house breaker rating in Amps. Charging will never exceed this limit.",
           "unavailable_behavior": "What to do when the power meter becomes unavailable: stop charging (safest), ignore and keep last value, or set a specific current (capped at the charger maximum).",
           "unavailable_fallback_current": "Charging current (A) to use when the meter is unavailable and mode is 'Set a specific current'. This value will be capped at the charger maximum.",
-          "action_set_current": "Script entity called to set the charging current. Receives 'current_a' and 'charger_id' variables.",
+          "action_set_current": "Script entity called to set the charging current. Receives 'current_a' (amps), 'current_w' (watts), and 'charger_id' variables.",
           "action_stop_charging": "Script entity called to stop charging when headroom is insufficient. Receives a 'charger_id' variable.",
           "action_start_charging": "Script entity called to start/resume charging after it was stopped. Receives a 'charger_id' variable."
         }
@@ -44,7 +44,7 @@
           "action_start_charging": "Start charging action (script)"
         },
         "data_description": {
-          "action_set_current": "Script entity called to set the charging current. Receives 'current_a' (float) and 'charger_id' (string) variables.",
+          "action_set_current": "Script entity called to set the charging current. Receives 'current_a' (float, amps), 'current_w' (float, watts), and 'charger_id' (string) variables.",
           "action_stop_charging": "Script entity called to stop charging. Receives a 'charger_id' (string) variable.",
           "action_start_charging": "Script entity called to start/resume charging. Receives a 'charger_id' (string) variable."
         }

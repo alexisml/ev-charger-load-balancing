@@ -668,6 +668,7 @@ class EvLoadBalancerCoordinator:
                 "set_current",
                 charger_id=charger_id,
                 current_a=new_current,
+                current_w=round(new_current * self._voltage, 1),
             )
         elif not new_active and prev_active:
             # Stop charging
@@ -683,6 +684,7 @@ class EvLoadBalancerCoordinator:
                 "set_current",
                 charger_id=charger_id,
                 current_a=new_current,
+                current_w=round(new_current * self._voltage, 1),
             )
 
     async def _call_action(
