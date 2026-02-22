@@ -457,8 +457,8 @@ class TestPowerMeterBoundaryValues:
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "active")
 
-        # For 6 A available: 32 - (P/230) ≥ 6 → P ≤ 5980 W
-        # At 5980 W: available = 32 - 26 = 6 A = min → should charge at 6 A
+        # For 6 A available: 32 - P/230 ≥ 6 → P ≤ 5980 W
+        # 5980 W → available = 32 - (5980/230) = 32 - 26 = 6 A = min → charge at 6 A
         hass.states.async_set(POWER_METER, "5980")
         await hass.async_block_till_done()
 
@@ -476,7 +476,7 @@ class TestPowerMeterBoundaryValues:
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "active")
 
-        # At 6210 W: available = 32 - 27 = 5 A < min (6 A) → stop
+        # 6210 W → available = 32 - (6210/230) = 32 - 27 = 5 A < min (6 A) → stop
         hass.states.async_set(POWER_METER, "6210")
         await hass.async_block_till_done()
 
@@ -547,7 +547,7 @@ class TestChargingCurrentExactBoundaries:
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
 
-        # 5980 W → available = 32 - 26 = 6 A = min → should charge
+        # 5980 W → available = 32 - (5980/230) = 32 - 26 = 6 A = min → charge
         hass.states.async_set(POWER_METER, "5980")
         await hass.async_block_till_done()
 
@@ -574,7 +574,7 @@ class TestChargingCurrentExactBoundaries:
 
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
 
-        # 5750 W → available = 32 - 25 = 7 A > min → charge at 7 A
+        # 5750 W → available = 32 - (5750/230) = 32 - 25 = 7 A > min → charge at 7 A
         hass.states.async_set(POWER_METER, "5750")
         await hass.async_block_till_done()
 
@@ -594,7 +594,7 @@ class TestChargingCurrentExactBoundaries:
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
 
-        # 6210 W → available = 32 - 27 = 5 A < min (6 A) → stop
+        # 6210 W → available = 32 - (6210/230) = 32 - 27 = 5 A < min (6 A) → stop
         hass.states.async_set(POWER_METER, "6210")
         await hass.async_block_till_done()
 
