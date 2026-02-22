@@ -54,7 +54,7 @@ automation:
 **Time-of-use tariffs:** Use an automation to toggle `switch.*_load_balancing_enabled` on/off based on the current tariff period, or adjust `number.*_max_charger_current` to a lower value during peak hours.
 
 ```yaml
-# Example: disable charging during peak hours
+# Example: disable charging entirely during peak hours
 automation:
   - alias: "Disable EV charging during peak"
     trigger:
@@ -73,6 +73,32 @@ automation:
       - action: switch.turn_on
         target:
           entity_id: switch.ev_charger_load_balancer_load_balancing_enabled
+```
+
+```yaml
+# Example: limit charging to 10 A during peak, full speed off-peak
+automation:
+  - alias: "Limit EV charging during peak"
+    trigger:
+      - platform: time
+        at: "17:00:00"
+    action:
+      - action: number.set_value
+        target:
+          entity_id: number.ev_charger_load_balancer_max_charger_current
+        data:
+          value: 10
+
+  - alias: "Full-speed EV charging off-peak"
+    trigger:
+      - platform: time
+        at: "21:00:00"
+    action:
+      - action: number.set_value
+        target:
+          entity_id: number.ev_charger_load_balancer_max_charger_current
+        data:
+          value: 32
 ```
 
 In both cases, the load balancer continues to protect your service limit — the external automation controls _when_ or _how much_ to charge, while the integration ensures you never exceed your breaker rating.
