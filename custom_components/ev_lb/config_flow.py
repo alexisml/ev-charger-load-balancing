@@ -43,6 +43,9 @@ from .const import (
     UNAVAILABLE_BEHAVIOR_SET_CURRENT,
     UNAVAILABLE_BEHAVIOR_STOP,
 )
+from ._log import get_logger
+
+_LOGGER = get_logger(__name__)
 
 
 class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGeneralTypeIssues,reportCallIssue]  # both needed: HA ConfigFlow domain= keyword is unknown without HA type stubs
@@ -76,8 +79,17 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
             state = self.hass.states.get(entity_id)
             if state is None:
                 errors[CONF_POWER_METER_ENTITY] = "entity_not_found"
+                _LOGGER.debug(
+                    "Config flow: entity %s not found", entity_id,
+                )
             else:
                 # Validation passed — create the config entry
+                _LOGGER.debug(
+                    "Config flow: creating entry (meter=%s, voltage=%.0f V, service=%.0f A)",
+                    entity_id,
+                    user_input.get(CONF_VOLTAGE, DEFAULT_VOLTAGE),
+                    user_input.get(CONF_MAX_SERVICE_CURRENT, DEFAULT_MAX_SERVICE_CURRENT),
+                )
                 return self.async_create_entry(
                     title="EV Load Balancing",
                     data=user_input,

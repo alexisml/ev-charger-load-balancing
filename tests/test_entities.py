@@ -20,6 +20,8 @@ from custom_components.ev_lb.const import (
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
     DOMAIN,
+    STATE_STOPPED,
+    UNAVAILABLE_BEHAVIOR_STOP,
 )
 
 
@@ -65,7 +67,7 @@ class TestDeviceRegistration:
         entries = er.async_entries_for_config_entry(
             ent_reg, mock_config_entry.entry_id
         )
-        assert len(entries) == 7  # 3 sensors + 1 binary_sensor + 2 numbers + 1 switch
+        assert len(entries) == 11  # 5 sensors + 3 binary_sensors + 2 numbers + 1 switch
 
         dev_reg = dr.async_get(hass)
         device = dev_reg.async_get_device(
@@ -97,7 +99,11 @@ class TestUniqueIds:
             "current_set",
             "available_current",
             "last_action_reason",
+            "balancer_state",
+            "configured_fallback",
             "active",
+            "meter_status",
+            "fallback_active",
             "max_charger_current",
             "min_ev_current",
             "enabled",
@@ -148,6 +154,51 @@ class TestSensorEntities:
         assert state is not None
         assert float(state.state) == 0.0
 
+    async def test_last_action_reason_sensor_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Last action reason is unknown before any events occur."""
+        await _setup_entry(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{mock_config_entry.entry_id}_last_action_reason"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == "unknown"
+
+    async def test_balancer_state_sensor_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Balancer state sensor reports 'stopped' on fresh install before any meter events."""
+        await _setup_entry(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{mock_config_entry.entry_id}_balancer_state"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == STATE_STOPPED
+
+    async def test_configured_fallback_sensor_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Configured fallback sensor shows the default fallback behavior on fresh install."""
+        await _setup_entry(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{mock_config_entry.entry_id}_configured_fallback"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == UNAVAILABLE_BEHAVIOR_STOP
+
 
 # ---------------------------------------------------------------------------
 # Binary sensor entity
@@ -169,6 +220,36 @@ class TestBinarySensorEntity:
         )
         assert entry is not None
         state = hass.states.get(entry)
+        assert state is not None
+        assert state.state == "off"
+
+    async def test_meter_status_binary_sensor_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Meter status binary sensor reports healthy (on) on fresh install."""
+        await _setup_entry(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{mock_config_entry.entry_id}_meter_status"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert state.state == "on"
+
+    async def test_fallback_active_binary_sensor_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Fallback active binary sensor reports no fallback (off) on fresh install."""
+        await _setup_entry(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{mock_config_entry.entry_id}_fallback_active"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
         assert state is not None
         assert state.state == "off"
 
@@ -331,7 +412,7 @@ class TestUnload:
         entries_before = er.async_entries_for_config_entry(
             ent_reg, mock_config_entry.entry_id
         )
-        assert len(entries_before) == 7
+        assert len(entries_before) == 11
 
         await hass.config_entries.async_unload(mock_config_entry.entry_id)
         await hass.async_block_till_done()

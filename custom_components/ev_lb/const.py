@@ -64,6 +64,13 @@ REASON_MANUAL_OVERRIDE = "manual_override"
 REASON_FALLBACK_UNAVAILABLE = "fallback_unavailable"
 REASON_PARAMETER_CHANGE = "parameter_change"
 
+# Balancer operational states — correspond to README state diagrams
+STATE_STOPPED = "stopped"
+STATE_ACTIVE = "active"
+STATE_ADJUSTING = "adjusting"
+STATE_RAMP_UP_HOLD = "ramp_up_hold"
+STATE_DISABLED = "disabled"
+
 # Event types for notable conditions
 EVENT_METER_UNAVAILABLE = f"{DOMAIN}_meter_unavailable"
 EVENT_OVERLOAD_STOP = f"{DOMAIN}_overload_stop"

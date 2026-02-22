@@ -12,7 +12,6 @@ on every state transition.
 
 from __future__ import annotations
 
-import logging
 import time
 
 from homeassistant.config_entries import ConfigEntry
@@ -53,12 +52,18 @@ from .const import (
     REASON_PARAMETER_CHANGE,
     REASON_POWER_METER_UPDATE,
     SIGNAL_UPDATE_FMT,
+    STATE_ACTIVE,
+    STATE_ADJUSTING,
+    STATE_DISABLED,
+    STATE_RAMP_UP_HOLD,
+    STATE_STOPPED,
     UNAVAILABLE_BEHAVIOR_IGNORE,
     UNAVAILABLE_BEHAVIOR_SET_CURRENT,
 )
 from .load_balancer import apply_ramp_up_limit, clamp_current, compute_available_current
+from ._log import get_logger
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = get_logger(__name__)
 
 
 class EvLoadBalancerCoordinator:
@@ -99,6 +104,10 @@ class EvLoadBalancerCoordinator:
         self.available_current_a: float = 0.0
         self.active: bool = False
         self.last_action_reason: str = ""
+        self.balancer_state: str = STATE_STOPPED
+        self.meter_healthy: bool = True
+        self.fallback_active: bool = False
+        self.configured_fallback: str = self._unavailable_behavior
 
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None
@@ -145,8 +154,19 @@ class EvLoadBalancerCoordinator:
             self._handle_power_change,
         )
         _LOGGER.debug(
-            "Coordinator started — listening to %s", self._power_meter_entity
+            "Coordinator started — listening to %s "
+            "(voltage=%.0f V, service_limit=%.0f A, unavailable=%s)",
+            self._power_meter_entity,
+            self._voltage,
+            self._max_service_current,
+            self._unavailable_behavior,
         )
+
+        # Sync meter health flags if meter is already unavailable at startup
+        meter_state = self.hass.states.get(self._power_meter_entity)
+        if meter_state is None or meter_state.state in ("unavailable", "unknown"):
+            self.meter_healthy = False
+            self.fallback_active = True
 
     @callback
     def async_stop(self) -> None:
@@ -163,14 +183,28 @@ class EvLoadBalancerCoordinator:
     @callback
     def _handle_power_change(self, event: Event) -> None:
         """React to a power-meter state change and recompute the target."""
-        if not self.enabled:
-            return
-
         new_state = event.data.get("new_state")
-        if new_state is None or new_state.state in (
+        is_unavailable = new_state is None or new_state.state in (
             "unavailable",
             "unknown",
-        ):
+        )
+
+        # Always track meter health so diagnostic sensors stay accurate
+        # even when load balancing is disabled.
+        if is_unavailable:
+            self.meter_healthy = False
+            self.fallback_active = True
+        else:
+            self.meter_healthy = True
+            self.fallback_active = False
+
+        if not self.enabled:
+            _LOGGER.debug("Power meter changed but load balancing is disabled — skipping")
+            self.balancer_state = STATE_DISABLED
+            async_dispatcher_send(self.hass, self.signal_update)
+            return
+
+        if is_unavailable:
             self._apply_fallback_current()
             return
 
@@ -197,10 +231,20 @@ class EvLoadBalancerCoordinator:
         effect immediately without waiting for the next power-meter event.
         """
         if not self.enabled:
+            _LOGGER.debug("Parameter changed but load balancing is disabled — skipping recompute")
+            self.balancer_state = STATE_DISABLED
+            async_dispatcher_send(self.hass, self.signal_update)
             return
 
         state = self.hass.states.get(self._power_meter_entity)
         if state is None or state.state in ("unavailable", "unknown"):
+            _LOGGER.debug(
+                "Parameter changed but power meter is %s — skipping recompute",
+                state.state if state else "missing",
+            )
+            self.meter_healthy = False
+            self.fallback_active = True
+            async_dispatcher_send(self.hass, self.signal_update)
             return
 
         try:
@@ -208,6 +252,10 @@ class EvLoadBalancerCoordinator:
         except (ValueError, TypeError):
             return
 
+        _LOGGER.debug(
+            "Runtime parameter changed — recomputing with last meter value %.1f W",
+            house_power_w,
+        )
         self._recompute(house_power_w, REASON_PARAMETER_CHANGE)
 
     # ------------------------------------------------------------------
@@ -229,6 +277,11 @@ class EvLoadBalancerCoordinator:
             self.min_ev_current,
         )
         target = 0.0 if clamped is None else clamped
+        _LOGGER.debug(
+            "Manual override: requested=%.1f A, clamped=%.1f A",
+            current_a,
+            target,
+        )
         self._update_and_notify(self.available_current_a, target, REASON_MANUAL_OVERRIDE)
 
     # ------------------------------------------------------------------
@@ -242,8 +295,12 @@ class EvLoadBalancerCoordinator:
         mode keeps the last computed value; all other modes update the
         charger current via ``_update_and_notify``.
         """
+        self.meter_healthy = False
+        self.fallback_active = True
         fallback = self._resolve_fallback()
         if fallback is None:
+            # Ignore mode — keep last value, just update sensor state
+            async_dispatcher_send(self.hass, self.signal_update)
             return
         self._update_and_notify(0.0, fallback, REASON_FALLBACK_UNAVAILABLE)
 
@@ -257,7 +314,7 @@ class EvLoadBalancerCoordinator:
         behavior = self._unavailable_behavior
 
         if behavior == UNAVAILABLE_BEHAVIOR_IGNORE:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Power meter %s is unavailable — ignoring (keeping last value %.1f A)",
                 self._power_meter_entity,
                 self.current_set_a,
@@ -320,15 +377,40 @@ class EvLoadBalancerCoordinator:
         if final_a < self.current_set_a:
             self._last_reduction_time = now
 
+        _LOGGER.debug(
+            "Recompute (%s): house=%.0f W, available=%.1f A, "
+            "raw_target=%.1f A, clamped=%.1f A, final=%.1f A",
+            reason,
+            house_power_w,
+            available_a,
+            raw_target_a,
+            target_a,
+            final_a,
+        )
+
+        if final_a != target_a:
+            _LOGGER.debug(
+                "Ramp-up cooldown holding current at %.1f A (target %.1f A)",
+                final_a,
+                target_a,
+            )
+
+        # Determine balancer operational state
+        ramp_up_held = final_a != target_a and final_a < target_a
+
         # Update computed state and execute actions
-        self._update_and_notify(round(available_a, 2), final_a, reason)
+        self._update_and_notify(round(available_a, 2), final_a, reason, ramp_up_held)
 
     # ------------------------------------------------------------------
     # State update, action execution, and entity notification
     # ------------------------------------------------------------------
 
     def _update_and_notify(
-        self, available_a: float, current_a: float, reason: str = ""
+        self,
+        available_a: float,
+        current_a: float,
+        reason: str = "",
+        ramp_up_held: bool = False,
     ) -> None:
         """Update state, fire charger actions for transitions, and notify entities.
 
@@ -344,6 +426,17 @@ class EvLoadBalancerCoordinator:
         self.active = current_a > 0
         self.last_action_reason = reason
 
+        # Determine balancer operational state
+        self.balancer_state = self._resolve_balancer_state(
+            prev_active, prev_current, ramp_up_held, reason,
+        )
+
+        # Log significant transitions at info level (low cadence)
+        if not prev_active and self.active:
+            _LOGGER.info("Charging started at %.1f A", current_a)
+        elif prev_active and not self.active:
+            _LOGGER.info("Charging stopped (was %.1f A, reason=%s)", prev_current, reason)
+
         # Fire HA events and manage persistent notifications
         self._fire_events(prev_active, prev_current, reason)
 
@@ -355,6 +448,34 @@ class EvLoadBalancerCoordinator:
             )
 
         async_dispatcher_send(self.hass, self.signal_update)
+
+    def _resolve_balancer_state(
+        self,
+        prev_active: bool,
+        prev_current: float,
+        ramp_up_held: bool,
+        reason: str,
+    ) -> str:
+        """Determine the balancer's operational state for the diagnostic sensor.
+
+        Maps to the charger state transitions described in the README:
+        - **disabled**: load balancing switch is off
+        - **stopped**: charger target is 0 A
+        - **ramp_up_hold**: increase blocked by cooldown
+        - **adjusting**: current changed this cycle
+        - **active**: target current > 0 and unchanged (steady state)
+
+        Meter health and fallback status are tracked by separate sensors.
+        """
+        if not self.enabled:
+            return STATE_DISABLED
+        if not self.active:
+            return STATE_STOPPED
+        if ramp_up_held:
+            return STATE_RAMP_UP_HOLD
+        if self.current_set_a != prev_current or not prev_active:
+            return STATE_ADJUSTING
+        return STATE_ACTIVE
 
     # ------------------------------------------------------------------
     # Event notifications and persistent notifications

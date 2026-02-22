@@ -115,6 +115,55 @@ Key rules:
 
 ---
 
+### Balancer operational states
+
+The integration exposes a diagnostic sensor (`sensor.*_balancer_state`) that tracks the coordinator's operational state on every cycle. These states map to the decision loop and charger transitions above:
+
+```mermaid
+stateDiagram-v2
+    state "STOPPED\ntarget = 0 A" as STOPPED
+    state "ADJUSTING\ntarget changed" as ADJUSTING
+    state "ACTIVE\nsteady state" as ACTIVE
+    state "RAMP_UP_HOLD\ncooldown blocking increase" as RAMP_UP_HOLD
+    state "DISABLED\nswitch off" as DISABLED
+
+    [*] --> STOPPED
+    STOPPED --> ADJUSTING : headroom ≥ min_ev_a
+    ADJUSTING --> ACTIVE : same target next cycle
+    ADJUSTING --> STOPPED : overload (target < min_ev_a)
+    ADJUSTING --> RAMP_UP_HOLD : increase needed but cooldown active
+    ACTIVE --> ADJUSTING : target changed
+    ACTIVE --> STOPPED : overload
+    ACTIVE --> RAMP_UP_HOLD : increase needed but cooldown active
+    RAMP_UP_HOLD --> ADJUSTING : cooldown elapsed
+    RAMP_UP_HOLD --> STOPPED : overload
+    DISABLED --> STOPPED : re-enabled (no headroom)
+    DISABLED --> ADJUSTING : re-enabled (with headroom)
+    STOPPED --> DISABLED : switch turned off
+    ACTIVE --> DISABLED : switch turned off
+    ADJUSTING --> DISABLED : switch turned off
+    RAMP_UP_HOLD --> DISABLED : switch turned off
+```
+
+---
+
+### Diagnostic sensors
+
+The integration provides several diagnostic sensors for monitoring and automation:
+
+| Entity | Type | Purpose |
+|--------|------|---------|
+| `sensor.*_balancer_state` | Diagnostic | Operational state: `stopped`, `active`, `adjusting`, `ramp_up_hold`, `disabled` |
+| `sensor.*_configured_fallback` | Diagnostic | Configured unavailable behavior: `stop`, `ignore`, or `set_current` |
+| `binary_sensor.*_meter_status` | Connectivity | **On** = power meter reporting valid readings. **Off** = unavailable. |
+| `binary_sensor.*_fallback_active` | Problem | **On** = meter-unavailable fallback in effect. **Off** = normal operation. |
+
+Together these sensors answer: *What is the balancer doing? Is my meter working? What fallback did I configure? Is that fallback active right now?*
+
+For detailed logging and diagnostics, see the [Logging Guide](docs/documentation/logging-guide.md).
+
+---
+
 ### Home Assistant restart
 
 All entity states (sensors, numbers, switch) survive a restart because each entity uses Home Assistant's **RestoreEntity** mechanism. On startup:
@@ -140,6 +189,8 @@ When the power meter entity transitions to `unavailable` or `unknown`, the coord
 | **Set a specific current** | Apply the configured fallback current, **capped at the charger maximum**. This ensures the fallback never exceeds the physical charger limit. For example: if max charger current is 32 A and the fallback is 50 A, the charger is set to 32 A; if the fallback is 6 A, the charger drops to 6 A. |
 
 When the meter recovers and starts reporting valid values again, normal computation resumes automatically on the next state change.
+
+> **Tip:** The `binary_sensor.*_meter_status` and `binary_sensor.*_fallback_active` sensors let you monitor meter health and fallback activation in dashboards and automations without enabling debug logs. The `sensor.*_configured_fallback` sensor shows which fallback mode is currently configured.
 
 > **Note:** The EV charger device itself is not monitored by this integration. The integration only controls the *target current* it sends; it does not track whether the charger is physically connected or responding. Charger health monitoring is the responsibility of the charger integration (e.g., OCPP).
 

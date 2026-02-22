@@ -31,6 +31,8 @@ async def async_setup_entry(
             EvLbCurrentSetSensor(entry, coordinator),
             EvLbAvailableCurrentSensor(entry, coordinator),
             EvLbLastActionReasonSensor(entry, coordinator),
+            EvLbBalancerStateSensor(entry, coordinator),
+            EvLbConfiguredFallbackSensor(entry, coordinator),
         ]
     )
 
@@ -148,4 +150,93 @@ class EvLbLastActionReasonSensor(RestoreSensor):
     def _handle_update(self) -> None:
         """Update sensor state from coordinator."""
         self._attr_native_value = self._coordinator.last_action_reason
+        self.async_write_ha_state()
+
+
+class EvLbBalancerStateSensor(RestoreSensor):
+    """Diagnostic sensor showing the balancer's current operational state.
+
+    Maps to the charger state transitions in the README diagrams:
+    stopped, active, adjusting, ramp_up_hold, disabled.
+    Meter health and fallback info are tracked by separate sensors.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "balancer_state"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_value = None
+
+    def __init__(
+        self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
+    ) -> None:
+        """Initialise the sensor."""
+        self._attr_unique_id = f"{entry.entry_id}_balancer_state"
+        self._attr_device_info = get_device_info(entry)
+        self._coordinator = coordinator
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last known value and subscribe to coordinator updates."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last and last.native_value is not None:
+            self._attr_native_value = last.native_value
+        else:
+            self._attr_native_value = self._coordinator.balancer_state
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._coordinator.signal_update,
+                self._handle_update,
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        """Update sensor state from coordinator."""
+        self._attr_native_value = self._coordinator.balancer_state
+        self.async_write_ha_state()
+
+
+class EvLbConfiguredFallbackSensor(RestoreSensor):
+    """Diagnostic sensor showing the configured unavailable-meter fallback behavior.
+
+    Displays the user's chosen fallback mode: stop, ignore, or set_current.
+    This is a configuration reference so users can see at a glance which
+    fallback mode is active alongside the meter_status and fallback_active
+    binary sensors.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "configured_fallback"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_value = None
+
+    def __init__(
+        self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
+    ) -> None:
+        """Initialise the sensor."""
+        self._attr_unique_id = f"{entry.entry_id}_configured_fallback"
+        self._attr_device_info = get_device_info(entry)
+        self._coordinator = coordinator
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last known value and subscribe to coordinator updates."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last and last.native_value is not None:
+            self._attr_native_value = last.native_value
+        else:
+            self._attr_native_value = self._coordinator.configured_fallback
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._coordinator.signal_update,
+                self._handle_update,
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        """Update sensor state from coordinator."""
+        self._attr_native_value = self._coordinator.configured_fallback
         self.async_write_ha_state()
