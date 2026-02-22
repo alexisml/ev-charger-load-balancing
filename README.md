@@ -25,7 +25,7 @@ This project gives Home Assistant users a native, no-helper-required solution to
 
 > ⚠️ **Current limitation (PR-1):** This integration currently supports **one charger per instance**. Multiple-charger support with per-charger prioritization is planned for Phase 2 (post-MVP). Multiple instances of this integration are not supported — only one config entry can be created. See the [MVP plan](docs/documentation/milestones/01-2026-02-19-mvp-plan.md) and the [multi-charger plan](docs/documentation/milestones/02-2026-02-19-multi-charger-plan.md) for details.
 
-Status: In development — custom integration (PR-1 through PR-6-MVP complete; working toward PR-7-MVP: HACS release)
+Status: In development — custom integration (PR-1 through PR-7-MVP complete; working toward PR-8-MVP: User manual)
 
 ## Why a custom integration?
 
