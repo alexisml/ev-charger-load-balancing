@@ -26,9 +26,56 @@ That's it. It's a reactive, real-time load balancer for a single EV charger.
 - **This does not monitor charger health.** The integration has no way to know if your charger is physically connected, responding, or actually applying the current it's told to set. Charger health monitoring is the responsibility of your charger integration (e.g., OCPP).
 - **This does not provide circuit-level protection.** The integration is a software load balancer. It is not a replacement for proper electrical protection (breakers, fuses, RCDs). Always ensure your electrical installation meets local codes.
 - **This does not support multiple chargers yet.** The current version supports exactly **one charger**. Only one instance of the integration can be configured. Multi-charger support with per-charger prioritization is planned for [Phase 2](milestones/02-2026-02-19-multi-charger-plan.md).
-- **This does not manage time-of-use tariffs or solar surplus.** It reacts to total metered power only. If you want to charge only during off-peak hours or when solar is producing, build an automation that turns the load-balancing switch on/off at the right times.
+- **This does not manage time-of-use tariffs or solar surplus directly.** The integration exclusively handles load balancing — it reacts to total metered power to prevent exceeding your service limit. However, it works well **alongside** external automations that handle these concerns. See [Combining with solar surplus or time-of-use tariffs](#combining-with-solar-surplus-or-time-of-use-tariffs) below.
 - **Current adjustments are in 1 A steps.** The integration floors all current values to whole Amps. Sub-amp precision is not supported.
-- **Increases are delayed.** After any current reduction, there's a 30-second cooldown before the integration allows the current to increase again. This is intentional — it prevents rapid oscillation when household load fluctuates near the service limit.
+- **Increases are delayed.** After any current reduction, there's a 30-second cooldown (default, currently not configurable) before the integration allows the current to increase again. This is intentional — it prevents rapid oscillation when household load fluctuates near the service limit.
+
+### Combining with solar surplus or time-of-use tariffs
+
+The integration focuses exclusively on **load balancing** — ensuring your home never exceeds the service limit. It does not know about electricity prices, solar production, or battery state. However, you can easily combine it with automations that handle these concerns:
+
+**Solar surplus charging:** Create a template sensor that calculates your available solar surplus in Amps, then use an automation to write that value to `number.*_max_charger_current`. The load balancer will use it as the upper limit and ensure the charger never exceeds your service limit on top of that.
+
+```yaml
+# Example: automation to set charger max from solar surplus
+automation:
+  - alias: "Set EV max current from solar surplus"
+    trigger:
+      - platform: state
+        entity_id: sensor.solar_surplus_amps  # your template sensor
+    action:
+      - action: number.set_value
+        target:
+          entity_id: number.ev_charger_load_balancer_max_charger_current
+        data:
+          value: "{{ states('sensor.solar_surplus_amps') | float(0) | round(0) }}"
+```
+
+**Time-of-use tariffs:** Use an automation to toggle `switch.*_load_balancing_enabled` on/off based on the current tariff period, or adjust `number.*_max_charger_current` to a lower value during peak hours.
+
+```yaml
+# Example: disable charging during peak hours
+automation:
+  - alias: "Disable EV charging during peak"
+    trigger:
+      - platform: time
+        at: "17:00:00"
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.ev_charger_load_balancer_load_balancing_enabled
+
+  - alias: "Re-enable EV charging off-peak"
+    trigger:
+      - platform: time
+        at: "21:00:00"
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.ev_charger_load_balancer_load_balancing_enabled
+```
+
+In both cases, the load balancer continues to protect your service limit — the external automation controls _when_ or _how much_ to charge, while the integration ensures you never exceed your breaker rating.
 
 ---
 
@@ -88,7 +135,7 @@ Every time your power meter reports a new value:
 3. **Apply safety rules:**
    - If target is below the minimum EV current → stop charging (instant)
    - If target is lower than current setting → reduce immediately (instant, no delay)
-   - If target is higher than current setting → increase only after 30s cooldown
+   - If target is higher than current setting → increase only after a cooldown period (default: 30 s, currently not configurable)
 
 ### Advanced details
 
@@ -134,7 +181,7 @@ flowchart TD
 
 **Reductions are always instant** because safety comes first — if your household load spikes, the charger current must drop immediately to avoid exceeding your breaker limit.
 
-**Increases are delayed by 30 seconds** after any reduction because household loads often fluctuate. Without this cooldown, the charger would rapidly oscillate between high and low current every few seconds when load hovers near the service limit. The 30-second hold gives transient loads (kettles, microwaves, washing machine spin cycles) time to settle before ramping back up.
+**Increases are delayed by a cooldown period** (default: 30 seconds, currently not user-configurable) after any reduction because household loads often fluctuate. Without this cooldown, the charger would rapidly oscillate between high and low current every few seconds when load hovers near the service limit. The cooldown gives transient loads (kettles, microwaves, washing machine spin cycles) time to settle before ramping back up.
 
 ---
 
