@@ -650,11 +650,14 @@ class EvLoadBalancerCoordinator:
         - **No change**: no action is executed.
 
         Every action receives a ``charger_id`` variable (the config entry ID)
-        so scripts can address the correct charger.
+        so scripts can address the correct charger.  The ``set_current`` action
+        additionally receives ``current_a`` (amps) and ``current_w`` (watts)
+        so charger scripts can use whichever unit their hardware requires.
         """
         new_active = self.active
         new_current = self.current_set_a
         charger_id = self.entry.entry_id
+        current_w = round(new_current * self._voltage, 1)
 
         if new_active and not prev_active:
             # Resume: start charging, then set the target current
@@ -668,6 +671,7 @@ class EvLoadBalancerCoordinator:
                 "set_current",
                 charger_id=charger_id,
                 current_a=new_current,
+                current_w=current_w,
             )
         elif not new_active and prev_active:
             # Stop charging
@@ -683,6 +687,7 @@ class EvLoadBalancerCoordinator:
                 "set_current",
                 charger_id=charger_id,
                 current_a=new_current,
+                current_w=current_w,
             )
 
     async def _call_action(

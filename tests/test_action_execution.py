@@ -66,6 +66,7 @@ class TestSetCurrentAction:
         assert calls[0].data["variables"]["charger_id"] == entry_id
         assert calls[1].data["entity_id"] == SET_CURRENT_SCRIPT
         assert calls[1].data["variables"]["current_a"] == 10.0
+        assert calls[1].data["variables"]["current_w"] == 2300.0
         assert calls[1].data["variables"]["charger_id"] == entry_id
 
     async def test_set_current_fires_on_current_adjustment(
@@ -91,14 +92,15 @@ class TestSetCurrentAction:
         assert len(calls) == 1
         assert calls[0].data["entity_id"] == SET_CURRENT_SCRIPT
         assert calls[0].data["variables"]["current_a"] == 15.0
+        assert calls[0].data["variables"]["current_w"] == 3450.0
         assert calls[0].data["variables"]["charger_id"] == mock_config_entry_with_actions.entry_id
 
-    async def test_set_current_payload_contains_current_a_as_float(
+    async def test_set_current_payload_contains_correct_types(
         self,
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Charger receives the target current as a numeric value and its identifier as text."""
+        """Charger receives amps, watts, and its identifier as correctly-typed values."""
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
 
@@ -112,6 +114,8 @@ class TestSetCurrentAction:
         variables = set_current_calls[0].data["variables"]
         assert isinstance(variables["current_a"], float)
         assert variables["current_a"] > 0
+        assert isinstance(variables["current_w"], float)
+        assert variables["current_w"] == variables["current_a"] * 230.0
         assert isinstance(variables["charger_id"], str)
         assert variables["charger_id"] == mock_config_entry_with_actions.entry_id
 
