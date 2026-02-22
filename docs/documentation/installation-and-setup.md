@@ -40,6 +40,18 @@ After installation, the integration is available in **Settings → Devices & Ser
 
 ### Step-by-step initial setup
 
+```mermaid
+flowchart LR
+    A["Settings → Devices<br/>& Services"] --> B["Add Integration"]
+    B --> C["Search: EV Charger<br/>Load Balancing"]
+    C --> D["Fill in config form<br/>(meter, voltage, service current)"]
+    D --> E{"Action scripts?"}
+    E -- "Yes" --> F["Select scripts<br/>(set current, stop, start)"]
+    E -- "Skip" --> G["Submit"]
+    F --> G
+    G --> H(["Device + entities<br/>created ✅"])
+```
+
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for **EV Charger Load Balancing** and select it.
 3. You'll see a configuration form. Here's what each field means:

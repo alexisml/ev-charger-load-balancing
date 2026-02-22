@@ -6,6 +6,14 @@ This guide explains how to configure the **action scripts** that allow the EV Ch
 
 The integration computes the optimal charging current based on your household power consumption. To actually _control_ your charger, it needs scripts that translate these decisions into commands for your specific charger hardware (e.g., OCPP, Modbus, REST API, etc.).
 
+```mermaid
+flowchart LR
+    LB["⚡ Load Balancer<br/>computes target current"] --> SC["📜 Your Scripts<br/>(set_current / stop / start)"]
+    SC --> CH["🚗 Charger Hardware<br/>(OCPP / Modbus / REST / switch)"]
+
+    style SC fill:#fff3cd,stroke:#856404
+```
+
 Three action scripts can be configured:
 
 | Action | When it fires | Variables passed |
@@ -141,6 +149,24 @@ The integration will reload automatically with the new configuration.
 ## Transition logic
 
 The integration tracks charger state and fires actions only when a transition occurs:
+
+```mermaid
+stateDiagram-v2
+    state "STOPPED (0 A)" as S
+    state "CHARGING (X A)" as C
+
+    [*] --> S
+    S --> C: start_charging → set_current(target)
+    C --> S: stop_charging
+    C --> C: set_current(new target)
+
+    note right of S
+        No action when staying stopped
+    end note
+    note right of C
+        No action when current unchanged
+    end note
+```
 
 | Previous state | New state | Actions fired |
 |---|---|---|

@@ -50,6 +50,27 @@ ha-ev-charger-balancer/
 └── pytest.ini                   # Pytest configuration
 ```
 
+### Component interaction
+
+```mermaid
+flowchart TD
+    PM["🔌 Power Meter<br/>(sensor entity)"] -->|state_changed event| CO["⚡ Coordinator<br/>(coordinator.py)"]
+    NUM["🔢 Number Entities<br/>(max current, min current)"] -->|value changed| CO
+    SW["🔘 Switch Entity<br/>(enabled/disabled)"] -->|toggled| CO
+    SVC["🛠️ ev_lb.set_limit<br/>(service call)"] -->|manual override| CO
+
+    CO -->|compute| LB["📐 Load Balancer<br/>(load_balancer.py)<br/>Pure functions, no HA dependency"]
+    LB -->|target current| CO
+
+    CO -->|dispatcher signal| SENS["📊 Sensor Entities<br/>(current set, available,<br/>state, reason)"]
+    CO -->|dispatcher signal| BSENS["🔴🟢 Binary Sensors<br/>(active, meter status,<br/>fallback active)"]
+    CO -->|script.turn_on| SCRIPTS["📜 Action Scripts<br/>(user-configured)<br/>set_current / stop / start"]
+    CO -->|bus event| EVENTS["📢 HA Event Bus<br/>(ev_lb_* events)"]
+    CO -->|create/dismiss| NOTIF["🔔 Persistent<br/>Notifications"]
+
+    SCRIPTS -->|charger commands| CHARGER["🚗 EV Charger<br/>(OCPP / Modbus / REST / etc.)"]
+```
+
 ### Key design decisions
 
 - **Pure computation functions** (`load_balancer.py`) have no dependency on Home Assistant. They can be tested with plain pytest.

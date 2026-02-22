@@ -6,6 +6,17 @@ This guide explains how to use the **event notifications** fired by the EV Charg
 
 The integration fires standard Home Assistant bus events when notable conditions occur. You can listen to these events in automations, scripts, or Node-RED and trigger any action — mobile notifications, flashing a light, logging to a file, etc.
 
+```mermaid
+flowchart LR
+    LB["⚡ Load Balancer<br/>detects fault or<br/>state change"] --> EB["📢 HA Event Bus<br/>(ev_lb_* events)"]
+    LB --> PN["🔔 Persistent<br/>Notifications<br/>(dashboard)"]
+    EB --> AU["🤖 Your Automations"]
+    AU --> MN["📱 Mobile Push"]
+    AU --> LT["💡 Flash Lights"]
+    AU --> TG["💬 Telegram / Email"]
+    AU --> NR["🔴 Node-RED"]
+```
+
 Five event types are available:
 
 | Event type | When it fires | Persistent notification |
@@ -76,6 +87,17 @@ Fired when a configured charger action script raises an error during execution.
 ## Persistent notifications
 
 For the three fault conditions (meter unavailable, overload, fallback), the integration also creates **persistent notifications** visible on the HA dashboard. These are automatically dismissed when the fault resolves:
+
+```mermaid
+flowchart LR
+    F1["Meter unavailable<br/>(stop mode)"] --> N1["🔔 Notification created"]
+    F2["Overload stop"] --> N2["🔔 Notification created"]
+    F3["Fallback activated"] --> N3["🔔 Notification created"]
+
+    N1 --> R1["Meter recovers → dismissed ✅"]
+    N2 --> R2["Charging resumes → dismissed ✅"]
+    N3 --> R3["Meter recovers → dismissed ✅"]
+```
 
 - **Meter unavailable / fallback** notifications are dismissed when the meter recovers (next valid power reading).
 - **Overload** notification is dismissed when charging resumes.

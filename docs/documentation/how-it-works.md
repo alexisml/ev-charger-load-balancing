@@ -281,6 +281,18 @@ stateDiagram-v2
 
 When your power meter sensor transitions to `unavailable` or `unknown`, the integration can no longer calculate headroom. What happens depends on your configured setting:
 
+```mermaid
+flowchart TD
+    A(["Power meter → unavailable / unknown"]) --> B{"Configured behavior?"}
+    B -- "Stop (default)" --> C["Set charger to 0 A<br/>Fire ev_lb_meter_unavailable event"]
+    B -- "Ignore" --> D["Keep last computed current<br/>No action taken"]
+    B -- "Set specific current" --> E["Apply fallback current<br/>(capped at charger max)<br/>Fire ev_lb_fallback_activated event"]
+    C --> F(["⏳ Wait for meter recovery"])
+    D --> F
+    E --> F
+    F --> G(["Meter reports valid value → resume normal balancing"])
+```
+
 | Mode | What happens | Best for |
 |---|---|---|
 | **Stop charging** (default) | Charger is immediately set to 0 A. | Most users — if you can't measure, you can't safely balance. |
@@ -315,6 +327,22 @@ data:
 
 All entity states survive a restart via Home Assistant's **RestoreEntity** mechanism:
 
+```mermaid
+sequenceDiagram
+    participant HA as Home Assistant
+    participant LB as Load Balancer
+    participant Sensors as Entity States
+    participant Meter as Power Meter
+
+    HA->>LB: Startup — load integration
+    LB->>Sensors: Restore last known values<br/>(current, headroom, state, switch)
+    Note over LB: Charger stays at last known current<br/>No commands sent yet
+    Meter->>LB: First valid power reading
+    LB->>LB: Run full recomputation
+    LB->>Sensors: Update all entities
+    Note over LB: Normal operation resumes
+```
+
 1. Sensors restore their last known values (current set, available current, balancer state).
 2. Number entities restore runtime parameters (max charger current, min EV current).
 3. The switch restores its enabled/disabled state.
@@ -327,6 +355,19 @@ All entity states survive a restart via Home Assistant's **RestoreEntity** mecha
 ## Safety guardrails
 
 The integration includes several defense-in-depth safety measures:
+
+```mermaid
+flowchart LR
+    A["Power meter<br/>reading"] --> B{"Value > 200 kW?"}
+    B -- "YES" --> C(["Reject as<br/>sensor error"])
+    B -- "NO" --> D["Compute target"]
+    D --> E{"target > charger max<br/>or service limit?"}
+    E -- "YES" --> F["Safety clamp:<br/>cap at safe maximum"]
+    E -- "NO" --> G{"target < min_ev_a?"}
+    F --> G
+    G -- "YES" --> H(["Stop charging<br/>(0 A)"])
+    G -- "NO" --> I(["Set current<br/>(target_a)"])
+```
 
 | Guardrail | What it does |
 |---|---|

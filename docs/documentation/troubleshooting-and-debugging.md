@@ -18,6 +18,25 @@ Before diving into specifics, run through this checklist:
 
 ## Common problems
 
+Use this flowchart to quickly identify the most likely cause:
+
+```mermaid
+flowchart TD
+    A(["Something isn't working"]) --> B{"Integration visible in<br/>Settings → Devices & Services?"}
+    B -- "NO" --> C["See: Integration does not appear"]
+    B -- "YES" --> D{"Power meter reporting<br/>valid values?"}
+    D -- "NO" --> E["See: Power meter entity not found"]
+    D -- "YES" --> F{"Charger responding<br/>to commands?"}
+    F -- "NO" --> G{"Action scripts<br/>configured?"}
+    G -- "NO" --> H["Configure scripts — see<br/>Action Scripts Guide"]
+    G -- "YES" --> I["See: Charger does not respond"]
+    F -- "YES" --> J{"Current behaving<br/>as expected?"}
+    J -- "NO" --> K{"Current never<br/>increases?"}
+    K -- "YES" --> L["See: Current never increases<br/>after a reduction"]
+    K -- "NO" --> M["See: Actions fire but<br/>wrong current is set"]
+    J -- "YES" --> N(["Check logs for warnings"])
+```
+
 ### The integration does not appear in Add Integration
 
 **Symptoms:** You search for "EV Charger Load Balancing" in Add Integration but nothing comes up.
@@ -147,6 +166,19 @@ DEBUG Manual override: requested=20.0 A, clamped=20.0 A
 WARNING Could not parse power meter value: not_a_number
 WARNING Power meter sensor.house_power is unavailable — stopping charging (0 A)
 WARNING Action set_current failed via script.ev_set_current: Service not found
+```
+
+### How log levels relate to the balancer lifecycle
+
+```mermaid
+flowchart LR
+    A["Meter event<br/>(every few seconds)"] -->|DEBUG| B["Full computation<br/>pipeline logged"]
+    B --> C{"State change?"}
+    C -- "YES<br/>(start/stop)" -->|INFO| D["Transition logged"]
+    C -- "NO" --> E["Silent at INFO"]
+    B --> F{"Problem?"}
+    F -- "YES" -->|WARNING| G["Fault logged<br/>(parse error, unavailable,<br/>action failure)"]
+    F -- "NO" --> E
 ```
 
 ### Reading a debug log line
