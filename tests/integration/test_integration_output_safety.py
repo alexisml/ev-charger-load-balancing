@@ -112,7 +112,7 @@ class TestChargingCurrentExactBoundaries:
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
         """Available current one amp above min (7 A) charges normally."""
-        calls = async_mock_service(hass, "script", "turn_on")
+        async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
         coordinator._ramp_up_time_s = 0.0
@@ -131,7 +131,7 @@ class TestChargingCurrentExactBoundaries:
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
         """Available current one amp below min (5 A) stops charging and fires stop action."""
-        calls = async_mock_service(hass, "script", "turn_on")
+        async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
         coordinator._ramp_up_time_s = 0.0

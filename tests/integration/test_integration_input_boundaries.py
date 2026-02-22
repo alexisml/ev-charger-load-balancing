@@ -17,12 +17,6 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.ev_lb.const import (
-    CONF_ACTION_SET_CURRENT,
-    CONF_ACTION_START_CHARGING,
-    CONF_ACTION_STOP_CHARGING,
-    CONF_MAX_SERVICE_CURRENT,
-    CONF_POWER_METER_ENTITY,
-    CONF_VOLTAGE,
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
     DOMAIN,
@@ -30,14 +24,11 @@ from custom_components.ev_lb.const import (
     MIN_CHARGER_CURRENT,
     MIN_EV_CURRENT_MAX,
     MIN_EV_CURRENT_MIN,
-    SAFETY_MAX_POWER_METER_W,
     SERVICE_SET_LIMIT,
 )
 from conftest import (
     POWER_METER,
-    SET_CURRENT_SCRIPT,
     STOP_CHARGING_SCRIPT,
-    START_CHARGING_SCRIPT,
     setup_integration,
     get_entity_id,
 )

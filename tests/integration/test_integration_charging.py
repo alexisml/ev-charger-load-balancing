@@ -72,10 +72,8 @@ class TestNormalDailyOperation:
 
         entry_id = mock_config_entry_with_actions.entry_id
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
-        available_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "available_current")
         active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
         reason_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "last_action_reason")
-        state_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "balancer_state")
 
         # Use a controllable clock to manage ramp-up cooldown
         mock_time = 1000.0

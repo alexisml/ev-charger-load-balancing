@@ -47,7 +47,7 @@ class TestParameterChangesDuringCharging:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Lowering max current caps the charger, raising min EV threshold stops it, and auto-resume restores charging."""
+        """Lowering max caps charger, raising min EV stops it, auto-resume restores charging."""
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
@@ -141,14 +141,13 @@ class TestManualOverrideAndResume:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Manual override takes effect with correct actions and reason, then auto-balancing resumes on next meter event."""
+        """Manual override fires correct actions and reason, auto-balancing resumes on next meter event."""
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
 
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
         reason_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "last_action_reason")
-        state_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "balancer_state")
 
         # Phase 1: Normal charging at 18 A
         hass.states.async_set(POWER_METER, "3000")
