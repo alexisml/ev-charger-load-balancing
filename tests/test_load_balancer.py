@@ -396,3 +396,119 @@ class TestApplyRampUpLimit:
             ramp_up_time_s=0.0,
         )
         assert result == 16.0
+
+
+# ---------------------------------------------------------------------------
+# Boundary value tests — pure computation logic
+# ---------------------------------------------------------------------------
+
+
+class TestComputeAvailableCurrentBoundaries:
+    """Boundary tests for compute_available_current at extreme/edge inputs."""
+
+    def test_zero_service_limit_gives_negative_with_any_load(self):
+        """A zero service limit always returns negative available current when there is load."""
+        result = compute_available_current(house_power_w=100.0, max_service_a=0.0)
+        assert result < 0
+
+    def test_zero_service_limit_zero_load_gives_zero(self):
+        """Zero service limit and zero load gives exactly zero available."""
+        result = compute_available_current(house_power_w=0.0, max_service_a=0.0)
+        assert result == 0.0
+
+    def test_very_large_power_gives_large_negative(self):
+        """Extremely large house power produces a large negative available current."""
+        result = compute_available_current(house_power_w=200_000.0, max_service_a=32.0)
+        assert result < -800.0
+
+    def test_negative_power_export_increases_available_current(self):
+        """Negative power (solar export) increases available current beyond service limit."""
+        result = compute_available_current(house_power_w=-5000.0, max_service_a=32.0)
+        # -(-5000)/230 = +21.7 A → available = 32 + 21.7 ≈ 53.7 A
+        assert result > 32.0
+
+    def test_power_exactly_at_service_limit_gives_zero(self):
+        """House power exactly matching service capacity leaves zero headroom."""
+        # 32 A × 230 V = 7360 W
+        result = compute_available_current(house_power_w=7360.0, max_service_a=32.0)
+        assert abs(result) < 1e-9
+
+
+class TestClampCurrentBoundaries:
+    """Boundary tests for clamp_current at exact limits and one-off values."""
+
+    def test_one_above_max_still_capped(self):
+        """Available current one above max is capped at max."""
+        result = clamp_current(available_a=33.0, max_charger_a=32.0, min_charger_a=6.0)
+        assert result == 32.0
+
+    def test_one_below_min_returns_none(self):
+        """Available current one below min stops charging."""
+        result = clamp_current(available_a=5.0, max_charger_a=32.0, min_charger_a=6.0)
+        assert result is None
+
+    def test_min_equals_max_at_value(self):
+        """When min equals max and available matches, charger operates at that value."""
+        result = clamp_current(available_a=10.0, max_charger_a=10.0, min_charger_a=10.0)
+        assert result == 10.0
+
+    def test_min_equals_max_below_value(self):
+        """When min equals max and available is below, charging stops."""
+        result = clamp_current(available_a=9.0, max_charger_a=10.0, min_charger_a=10.0)
+        assert result is None
+
+    def test_very_large_available_caps_at_max(self):
+        """Extremely large available current is still capped at max charger limit."""
+        result = clamp_current(available_a=1000.0, max_charger_a=32.0, min_charger_a=6.0)
+        assert result == 32.0
+
+    def test_fractional_step_floored_to_exactly_min(self):
+        """Available current above min is step-floored to exactly the minimum and still charges."""
+        # 6.9 A with step 1.0 → floor to 6.0 → exactly at min → charge
+        result = clamp_current(available_a=6.9, max_charger_a=32.0, min_charger_a=6.0, step_a=1.0)
+        assert result == 6.0
+
+    def test_step_flooring_drops_below_min(self):
+        """Available current slightly above min but step-floored to below min with large step returns None."""
+        # 6.5 A with step 2.0 → floor to 6.0 → 6 ≥ 6 → charge at 6
+        result = clamp_current(available_a=6.5, max_charger_a=32.0, min_charger_a=6.0, step_a=2.0)
+        assert result == 6.0
+
+        # 7.9 A with step 4.0 → floor to 4.0 → 4 < 6 → stop
+        result = clamp_current(available_a=7.9, max_charger_a=32.0, min_charger_a=6.0, step_a=4.0)
+        assert result is None
+
+
+class TestDistributeCurrentBoundaries:
+    """Boundary tests for distribute_current at extreme inputs."""
+
+    def test_available_exactly_at_single_charger_min(self):
+        """Exactly enough available for one charger at its minimum."""
+        result = distribute_current(available_a=6.0, chargers=[(6.0, 32.0)])
+        assert result == [6.0]
+
+    def test_available_one_below_single_charger_min(self):
+        """One amp below a single charger's minimum stops it."""
+        result = distribute_current(available_a=5.0, chargers=[(6.0, 32.0)])
+        assert result == [None]
+
+    def test_very_large_available_caps_all_chargers(self):
+        """Extremely large available current caps all chargers at their maximums."""
+        result = distribute_current(
+            available_a=10000.0, chargers=[(6.0, 32.0), (6.0, 16.0)]
+        )
+        assert result == [32.0, 16.0]
+
+    def test_single_amp_shared_between_two_chargers_stops_both(self):
+        """1 A shared between two chargers (0.5 A each) stops both."""
+        result = distribute_current(available_a=1.0, chargers=[(6.0, 32.0), (6.0, 32.0)])
+        assert result == [None, None]
+
+    def test_asymmetric_minimums_one_charges_one_stops(self):
+        """With different minimums, higher-min charger may stop while lower-min continues."""
+        # 8 A available, two chargers: min=4 max=32, min=8 max=32
+        # fair_share = 4 A → charger A: 4 ≥ 4 → ok, charger B: 4 < 8 → stop
+        # remaining = 8 A, 1 active → charger A gets 8 A
+        result = distribute_current(available_a=8.0, chargers=[(4.0, 32.0), (8.0, 32.0)])
+        assert result[0] == 8.0
+        assert result[1] is None
