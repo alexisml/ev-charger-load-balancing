@@ -86,6 +86,9 @@
       },
       "min_ev_current": {
         "name": "Corriente mínima del VE"
+      },
+      "ramp_up_time": {
+        "name": "Tiempo de espera de rampa"
       }
     },
     "switch": {

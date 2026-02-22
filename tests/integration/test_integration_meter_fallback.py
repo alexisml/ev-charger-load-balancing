@@ -67,7 +67,7 @@ class TestMeterFailureAndRecovery:
         with patch(PN_CREATE) as mock_create, patch(PN_DISMISS) as mock_dismiss:
             await setup_integration(hass, mock_config_entry)
             coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-            coordinator._ramp_up_time_s = 0.0  # Disable cooldown for clean transitions
+            coordinator.ramp_up_time_s = 0.0  # Disable cooldown for clean transitions
 
             entry_id = mock_config_entry.entry_id
             current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
@@ -299,7 +299,7 @@ class TestParameterChangeDuringFallback:
         """Lowering max charger current during stop-mode fallback takes effect when meter recovers."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0  # Disable cooldown for clean transitions
+        coordinator.ramp_up_time_s = 0.0  # Disable cooldown for clean transitions
 
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
         max_current_id = get_entity_id(hass, mock_config_entry, "number", "max_charger_current")
@@ -366,7 +366,7 @@ class TestMinEvCurrentChangeDuringFallback:
         )
         await setup_integration(hass, entry)
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0  # Disable cooldown
+        coordinator.ramp_up_time_s = 0.0  # Disable cooldown
 
         current_set_id = get_entity_id(hass, entry, "sensor", "current_set")
         active_id = get_entity_id(hass, entry, "binary_sensor", "active")

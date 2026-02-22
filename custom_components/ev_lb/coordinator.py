@@ -99,6 +99,7 @@ class EvLoadBalancerCoordinator:
         self.max_charger_current: float = DEFAULT_MAX_CHARGER_CURRENT
         self.min_ev_current: float = DEFAULT_MIN_EV_CURRENT
         self.enabled: bool = True
+        self.ramp_up_time_s: float = DEFAULT_RAMP_UP_TIME
 
         # Computed state (read by sensor/binary-sensor entities)
         self.current_set_a: float = 0.0
@@ -112,7 +113,6 @@ class EvLoadBalancerCoordinator:
 
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None
-        self._ramp_up_time_s: float = DEFAULT_RAMP_UP_TIME
         self._time_fn = time.monotonic
 
         # Dispatcher signal name
@@ -389,7 +389,7 @@ class EvLoadBalancerCoordinator:
             target_a,
             self._last_reduction_time,
             now,
-            self._ramp_up_time_s,
+            self.ramp_up_time_s,
         )
 
         # Track reductions for ramp-up cooldown

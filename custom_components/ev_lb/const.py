@@ -45,6 +45,9 @@ DEFAULT_UNAVAILABLE_FALLBACK_CURRENT = 6.0  # Fallback current for "set_current"
 # Dispatcher signal template — format with entry_id
 SIGNAL_UPDATE_FMT = f"{DOMAIN}_update_{{entry_id}}"
 
+# Ramp-up time config key (exposed as a number entity)
+CONF_RAMP_UP_TIME = "ramp_up_time"
+
 # Validation limits
 MIN_VOLTAGE = 100.0
 MAX_VOLTAGE = 480.0
@@ -54,6 +57,8 @@ MIN_CHARGER_CURRENT = 1.0
 MAX_CHARGER_CURRENT = 80.0
 MIN_EV_CURRENT_MIN = 1.0
 MIN_EV_CURRENT_MAX = 32.0
+MIN_RAMP_UP_TIME = 5.0  # Seconds — absolute minimum (very low values risk oscillation)
+MAX_RAMP_UP_TIME = 5 * 60  # Seconds — 5 minutes maximum
 
 # Safety guardrails — defense-in-depth limits that should never be exceeded
 # regardless of user configuration or sensor values.

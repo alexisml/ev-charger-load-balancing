@@ -82,7 +82,7 @@ class TestNormalDailyOperation:
             return mock_time
 
         coordinator._time_fn = fake_monotonic
-        coordinator._ramp_up_time_s = 30.0
+        coordinator.ramp_up_time_s = 30.0
 
         # --- Phase 1: Low household load → charger starts at near-max capacity ---
         # 1000 W at 230 V → draw ~4.3 A → headroom = 32 - 4.3 = 27.7 A → target = 27 A
@@ -192,7 +192,7 @@ class TestRampUpCooldownFullCycle:
         """Balancer state correctly transitions through reduction, hold, and release phases."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 30.0
+        coordinator.ramp_up_time_s = 30.0
 
         mock_time = 1000.0
 
@@ -263,7 +263,7 @@ class TestOverloadWithEventAndActionChain:
         with patch(PN_CREATE) as mock_create, patch(PN_DISMISS) as mock_dismiss:
             await setup_integration(hass, mock_config_entry_with_actions)
             coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
-            coordinator._ramp_up_time_s = 0.0  # Disable cooldown for clean resume
+            coordinator.ramp_up_time_s = 0.0  # Disable cooldown for clean resume
 
             entry_id = mock_config_entry_with_actions.entry_id
             current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
@@ -354,7 +354,7 @@ class TestRampUpCustomTiming:
         """A 60-second ramp-up cooldown correctly blocks increases at 59s and allows them at 61s."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 60.0  # Non-default 60s cooldown
+        coordinator.ramp_up_time_s = 60.0  # Non-default 60s cooldown
 
         mock_time = 2000.0
 
