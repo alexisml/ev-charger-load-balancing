@@ -87,7 +87,7 @@ class TestChargingCurrentExactBoundaries:
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
@@ -115,7 +115,7 @@ class TestChargingCurrentExactBoundaries:
         async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
 
@@ -134,7 +134,7 @@ class TestChargingCurrentExactBoundaries:
         async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
@@ -155,7 +155,7 @@ class TestChargingCurrentExactBoundaries:
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
 
@@ -177,7 +177,7 @@ class TestChargingCurrentExactBoundaries:
         entry = _make_entry(hass, max_service_a=40.0)
         await setup_integration(hass, entry)
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, entry, "sensor", "current_set")
 
@@ -212,7 +212,7 @@ class TestOutputNeverExceedsServiceLimit:
         entry = _make_entry(hass, max_service_a=20.0)
         await setup_integration(hass, entry)
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         # Raise charger max to 80 A
         max_id = get_entity_id(hass, entry, "number", "max_charger_current")
@@ -241,7 +241,7 @@ class TestOutputNeverExceedsServiceLimit:
         entry = _make_entry(hass, max_service_a=20.0)
         await setup_integration(hass, entry)
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         # Raise charger max to 80 A so clamp_current doesn't catch it first
         max_id = get_entity_id(hass, entry, "number", "max_charger_current")
@@ -276,7 +276,7 @@ class TestOutputNeverExceedsServiceLimit:
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, entry)
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         # Raise charger max to 80 A
         max_id = get_entity_id(hass, entry, "number", "max_charger_current")
@@ -334,7 +334,7 @@ class TestOutputNeverExceedsServiceLimit:
         )
         await setup_integration(hass, entry)
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, entry, "sensor", "current_set")
 
@@ -357,7 +357,7 @@ class TestOutputNeverExceedsServiceLimit:
         entry = _make_entry(hass, max_service_a=40.0)
         await setup_integration(hass, entry)
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         # Lower charger max to 10 A
         max_id = get_entity_id(hass, entry, "number", "max_charger_current")
@@ -393,7 +393,7 @@ class TestPowerMeterSafetyGuardrails:
         """A power meter reading above 200 kW is rejected and state is unchanged."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
 
@@ -414,7 +414,7 @@ class TestPowerMeterSafetyGuardrails:
         """A power meter reading of exactly 200 kW is accepted (within the limit)."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "active")
@@ -432,7 +432,7 @@ class TestPowerMeterSafetyGuardrails:
         """A negative power meter reading below -200 kW is rejected as sensor error."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
 
@@ -453,7 +453,7 @@ class TestPowerMeterSafetyGuardrails:
         """Changing a parameter when the meter shows an insane value doesn't produce unsafe output."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0
+        coordinator.ramp_up_time_s = 0.0
 
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
         max_id = get_entity_id(hass, mock_config_entry, "number", "max_charger_current")

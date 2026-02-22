@@ -210,7 +210,7 @@ class TestRampUpCooldown:
         """Charger current is held after a reduction while cooldown is active."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 30.0
+        coordinator.ramp_up_time_s = 30.0
 
         # Use a controllable clock
         mock_time = 1000.0
@@ -250,7 +250,7 @@ class TestRampUpCooldown:
         """Charger current can increase once the cooldown period has elapsed."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 30.0
+        coordinator.ramp_up_time_s = 30.0
 
         mock_time = 1000.0
 

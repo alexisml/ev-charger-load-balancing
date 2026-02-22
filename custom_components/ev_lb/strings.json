@@ -86,6 +86,9 @@
       },
       "min_ev_current": {
         "name": "Min EV current"
+      },
+      "ramp_up_time": {
+        "name": "Ramp-up cooldown"
       }
     },
     "switch": {

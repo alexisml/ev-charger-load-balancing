@@ -19,6 +19,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.ev_lb.const import (
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
+    DEFAULT_RAMP_UP_TIME,
     DOMAIN,
     STATE_STOPPED,
     UNAVAILABLE_BEHAVIOR_STOP,
@@ -67,7 +68,7 @@ class TestDeviceRegistration:
         entries = er.async_entries_for_config_entry(
             ent_reg, mock_config_entry.entry_id
         )
-        assert len(entries) == 11  # 5 sensors + 3 binary_sensors + 2 numbers + 1 switch
+        assert len(entries) == 12  # 5 sensors + 3 binary_sensors + 3 numbers + 1 switch
 
         dev_reg = dr.async_get(hass)
         device = dev_reg.async_get_device(
@@ -106,6 +107,7 @@ class TestUniqueIds:
             "fallback_active",
             "max_charger_current",
             "min_ev_current",
+            "ramp_up_time",
             "enabled",
         }
         actual_suffixes = set()
@@ -330,6 +332,42 @@ class TestNumberEntities:
         state = hass.states.get(entity_id)
         assert float(state.state) == 8.0
 
+    async def test_ramp_up_time_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Ramp-up cooldown number starts at the default (30 s)."""
+        await _setup_entry(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "number", DOMAIN, f"{mock_config_entry.entry_id}_ramp_up_time"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert float(state.state) == DEFAULT_RAMP_UP_TIME
+
+    async def test_ramp_up_time_set_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Ramp-up cooldown number can be updated and the new value is reflected in the coordinator."""
+        await _setup_entry(hass, mock_config_entry)
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "number", DOMAIN, f"{mock_config_entry.entry_id}_ramp_up_time"
+        )
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": entity_id, "value": 60.0},
+            blocking=True,
+        )
+        state = hass.states.get(entity_id)
+        assert float(state.state) == 60.0
+        assert coordinator.ramp_up_time_s == 60.0
+
 
 # ---------------------------------------------------------------------------
 # Switch entity
@@ -412,7 +450,7 @@ class TestUnload:
         entries_before = er.async_entries_for_config_entry(
             ent_reg, mock_config_entry.entry_id
         )
-        assert len(entries_before) == 11
+        assert len(entries_before) == 12
 
         await hass.config_entries.async_unload(mock_config_entry.entry_id)
         await hass.async_block_till_done()

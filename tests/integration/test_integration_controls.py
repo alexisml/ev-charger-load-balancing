@@ -51,7 +51,7 @@ class TestParameterChangesDuringCharging:
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0  # Disable cooldown for clean transitions
+        coordinator.ramp_up_time_s = 0.0  # Disable cooldown for clean transitions
 
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
@@ -349,7 +349,7 @@ class TestDisableDuringOverloadAndReenable:
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0  # Disable cooldown
+        coordinator.ramp_up_time_s = 0.0  # Disable cooldown
 
         current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")

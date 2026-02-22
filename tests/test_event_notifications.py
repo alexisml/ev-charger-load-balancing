@@ -189,7 +189,7 @@ class TestChargingResumedEvent:
         """An event notifies automations when charging successfully resumes after a stop."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        coordinator._ramp_up_time_s = 0.0  # disable cooldown for clean resume
+        coordinator.ramp_up_time_s = 0.0  # disable cooldown for clean resume
         events = _collect_events(hass, EVENT_CHARGING_RESUMED)
 
         # Start charging at 18 A
@@ -215,7 +215,7 @@ class TestChargingResumedEvent:
         with patch(PN_CREATE), patch(PN_DISMISS) as mock_dismiss:
             await setup_integration(hass, mock_config_entry)
             coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-            coordinator._ramp_up_time_s = 0.0
+            coordinator.ramp_up_time_s = 0.0
 
             # Charge → overload stop → resume
             hass.states.async_set(POWER_METER, "3000")
