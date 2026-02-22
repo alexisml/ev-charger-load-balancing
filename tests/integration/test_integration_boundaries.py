@@ -657,10 +657,11 @@ class TestChargingCurrentExactBoundaries:
 
 
 class TestOutputNeverExceedsServiceLimit:
-    """Verify the charger output never exceeds the service limit.
+    """Verify the charger output never exceeds the service or charger limit.
 
-    When the charger max is set higher than the house service limit,
-    the safety clamp ensures output is capped at the service limit.
+    Tests both directions: when charger max > service limit the output is
+    capped at the service limit, and when service limit > charger max the
+    output is capped at the charger max.
     """
 
     async def test_charger_max_above_service_capped_in_normal_operation(
