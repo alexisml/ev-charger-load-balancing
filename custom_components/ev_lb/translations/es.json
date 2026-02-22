@@ -88,7 +88,7 @@
         "name": "Corriente mínima del VE"
       },
       "ramp_up_time": {
-        "name": "Tiempo de espera de rampa"
+        "name": "Retardo de subida de corriente"
       }
     },
     "switch": {
