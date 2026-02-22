@@ -32,6 +32,9 @@ from conftest import (
     get_entity_id,
 )
 
+# Entity ID for restore cache (deterministic from device name + translation key)
+_SENSOR_CURRENT_SET = "sensor.ev_charger_load_balancer_charging_current_set"
+
 
 # ---------------------------------------------------------------------------
 # Scenario 6: Full lifecycle from config setup through to unload
@@ -207,10 +210,6 @@ class TestHaRestartWithStateRestoration:
         assert coordinator.enabled is True
 
         # Verify entities have live states (not "unavailable")
-        current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
-        active_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "active")
-        switch_id = get_entity_id(hass, mock_config_entry, "switch", "enabled")
-
         assert hass.states.get(current_set_id).state != "unavailable"
         assert hass.states.get(switch_id).state == "on"
 
@@ -269,10 +268,6 @@ class TestHaRestartWithRestoreCache:
 
         new_current = float(hass.states.get(current_set_id).state)
         assert new_current > 0
-
-
-# Entity IDs for restore cache (deterministic from device name + translation key)
-_SENSOR_CURRENT_SET = "sensor.ev_charger_load_balancer_charging_current_set"
 
 
 # ---------------------------------------------------------------------------
