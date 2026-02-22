@@ -18,7 +18,7 @@ Three action scripts can be configured:
 
 | Action | When it fires | Variables passed |
 |---|---|---|
-| **Set current** | When the target charging current changes | `current_a` (float), `charger_id` (string) |
+| **Set current** | When the target charging current changes | `current_a` (float), `current_w` (float), `charger_id` (string) |
 | **Stop charging** | When headroom drops below the minimum and charging must stop | `charger_id` (string) |
 | **Start charging** | When charging can resume after being stopped | `charger_id` (string) |
 
@@ -35,6 +35,7 @@ Every script receives variables automatically. You can reference them in your sc
 | Variable | Type | Description | Example |
 |---|---|---|---|
 | `current_a` | `float` | Target charging current in Amps, floored to 1 A steps | `16.0` |
+| `current_w` | `float` | Target charging power in Watts (`current_a × voltage`) | `3680.0` |
 | `charger_id` | `string` | Unique identifier for the charger (config entry ID) | `abc123def456` |
 
 ### `stop_charging` script variables
@@ -77,6 +78,15 @@ fields:
         max: 80
         step: 1
         unit_of_measurement: A
+  current_w:
+    description: Target charging power in Watts
+    example: 3680.0
+    selector:
+      number:
+        min: 0
+        max: 18400
+        step: 1
+        unit_of_measurement: W
   charger_id:
     description: Charger identifier
     example: "abc123"
@@ -170,9 +180,9 @@ stateDiagram-v2
 
 | Previous state | New state | Actions fired |
 |---|---|---|
-| **Stopped** (0 A) | **Charging** (> 0 A) | `start_charging` → `set_current(current_a)` |
+| **Stopped** (0 A) | **Charging** (> 0 A) | `start_charging` → `set_current(current_a, current_w)` |
 | **Charging** (X A) | **Stopped** (0 A) | `stop_charging` |
-| **Charging** (X A) | **Charging** (Y A, Y ≠ X) | `set_current(current_a)` |
+| **Charging** (X A) | **Charging** (Y A, Y ≠ X) | `set_current(current_a, current_w)` |
 | **Stopped** (0 A) | **Stopped** (0 A) | _(no action)_ |
 | **Charging** (X A) | **Charging** (X A) | _(no action)_ |
 
@@ -209,7 +219,7 @@ The scripts are the bridge between this integration and your specific charger. H
 ### OCPP chargers (lbbrhzn/ocpp)
 
 ```yaml
-# set_current
+# set_current — use amps
 - action: ocpp.set_charge_rate
   data:
     limit_amps: "{{ current_a }}"
@@ -227,10 +237,15 @@ The scripts are the bridge between this integration and your specific charger. H
 ### REST API chargers
 
 ```yaml
-# set_current
+# set_current — use whichever unit your API requires
 - action: rest_command.set_charger_current
   data:
     current: "{{ current_a }}"
+
+# — or in watts:
+- action: rest_command.set_charger_power
+  data:
+    power_w: "{{ current_w }}"
 
 # stop_charging
 - action: rest_command.stop_charger
