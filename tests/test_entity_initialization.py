@@ -49,7 +49,7 @@ _BINARY_ACTIVE = "binary_sensor.ev_charger_load_balancer_load_balancing_active"
 
 
 class TestSensorDefaultsAndRestore:
-    """`current_set` sensor starts at zero on a fresh install, restores its last value from cache, and reflects that value in balancing."""
+    """`current_set` sensor starts at zero on a fresh install, restores from cache, and reflects in balancing."""
 
     async def test_current_set_defaults_to_zero(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
