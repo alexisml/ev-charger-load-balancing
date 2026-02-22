@@ -183,17 +183,28 @@ class EvLoadBalancerCoordinator:
     @callback
     def _handle_power_change(self, event: Event) -> None:
         """React to a power-meter state change and recompute the target."""
+        new_state = event.data.get("new_state")
+        is_unavailable = new_state is None or new_state.state in (
+            "unavailable",
+            "unknown",
+        )
+
+        # Always track meter health so diagnostic sensors stay accurate
+        # even when load balancing is disabled.
+        if is_unavailable:
+            self.meter_healthy = False
+            self.fallback_active = True
+        else:
+            self.meter_healthy = True
+            self.fallback_active = False
+
         if not self.enabled:
             _LOGGER.debug("Power meter changed but load balancing is disabled — skipping")
             self.balancer_state = STATE_DISABLED
             async_dispatcher_send(self.hass, self.signal_update)
             return
 
-        new_state = event.data.get("new_state")
-        if new_state is None or new_state.state in (
-            "unavailable",
-            "unknown",
-        ):
+        if is_unavailable:
             self._apply_fallback_current()
             return
 
@@ -205,9 +216,6 @@ class EvLoadBalancerCoordinator:
             )
             return
 
-        # Meter recovered — clear fallback flags
-        self.meter_healthy = True
-        self.fallback_active = False
         self._recompute(house_power_w)
 
     # ------------------------------------------------------------------
@@ -235,6 +243,7 @@ class EvLoadBalancerCoordinator:
                 state.state if state else "missing",
             )
             self.meter_healthy = False
+            self.fallback_active = True
             async_dispatcher_send(self.hass, self.signal_update)
             return
 
