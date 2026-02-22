@@ -55,6 +55,10 @@ MAX_CHARGER_CURRENT = 80.0
 MIN_EV_CURRENT_MIN = 1.0
 MIN_EV_CURRENT_MAX = 32.0
 
+# Safety guardrails — defense-in-depth limits that should never be exceeded
+# regardless of user configuration or sensor values.
+SAFETY_MAX_POWER_METER_W = 200_000.0  # 200 kW — reject readings above this as sensor errors
+
 # Service name
 SERVICE_SET_LIMIT = "set_limit"
 

@@ -51,6 +51,7 @@ from .const import (
     REASON_MANUAL_OVERRIDE,
     REASON_PARAMETER_CHANGE,
     REASON_POWER_METER_UPDATE,
+    SAFETY_MAX_POWER_METER_W,
     SIGNAL_UPDATE_FMT,
     STATE_ACTIVE,
     STATE_ADJUSTING,
@@ -216,6 +217,15 @@ class EvLoadBalancerCoordinator:
             )
             return
 
+        if abs(house_power_w) > SAFETY_MAX_POWER_METER_W:
+            _LOGGER.warning(
+                "Power meter value %.0f W exceeds safety limit (%.0f W) "
+                "— ignoring as likely sensor error",
+                house_power_w,
+                SAFETY_MAX_POWER_METER_W,
+            )
+            return
+
         self._recompute(house_power_w)
 
     # ------------------------------------------------------------------
@@ -250,6 +260,15 @@ class EvLoadBalancerCoordinator:
         try:
             house_power_w = float(state.state)
         except (ValueError, TypeError):
+            return
+
+        if abs(house_power_w) > SAFETY_MAX_POWER_METER_W:
+            _LOGGER.warning(
+                "Power meter value %.0f W exceeds safety limit (%.0f W) "
+                "— ignoring as likely sensor error",
+                house_power_w,
+                SAFETY_MAX_POWER_METER_W,
+            )
             return
 
         _LOGGER.debug(
@@ -417,7 +436,24 @@ class EvLoadBalancerCoordinator:
         Captures the previous state, applies the new values, schedules any
         required charger action calls, fires HA events for notable conditions,
         and sends the HA dispatcher signal so entity platforms can refresh.
+
+        A defense-in-depth safety clamp ensures the output never exceeds
+        the service or charger limits, even if upstream logic has a bug.
         """
+        # Safety clamp: output must never exceed charger max or service limit
+        if current_a > 0:
+            safe_max = min(self.max_charger_current, self._max_service_current)
+            if current_a > safe_max:
+                _LOGGER.warning(
+                    "Safety clamp: computed %.1f A exceeds safe maximum %.1f A "
+                    "(charger_max=%.1f, service_max=%.1f) — clamping",
+                    current_a,
+                    safe_max,
+                    self.max_charger_current,
+                    self._max_service_current,
+                )
+                current_a = safe_max
+
         prev_active = self.active
         prev_current = self.current_set_a
 
