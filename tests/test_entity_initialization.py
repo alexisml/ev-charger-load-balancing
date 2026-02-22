@@ -41,7 +41,7 @@ _BINARY_ACTIVE = "binary_sensor.ev_charger_load_balancer_load_balancing_active"
 
 
 class TestSensorDefaultsAndRestore:
-    """Sensor entities use correct default values, sync with the coordinator, and restore from cache."""
+    """`current_set` sensor starts at zero on a fresh install, restores its last value from cache, and reflects that value in balancing."""
 
     async def test_current_set_defaults_to_zero(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
@@ -224,7 +224,7 @@ class TestSwitchDefaultsAndSync:
 
 
 class TestBinarySensorDefaults:
-    """Binary sensor entities use expected default states on a fresh install and restore from cache."""
+    """Binary sensors use expected default states on a fresh install, and the active sensor restores from cache."""
 
     async def test_active_binary_sensor_defaults_off(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
@@ -311,3 +311,7 @@ class TestReloadIntegration:
             ent_reg, mock_config_entry.entry_id
         )
         assert len(entries) == 11
+
+        # Verify at least one entity has a live state after reload
+        switch_id = get_entity_id(hass, mock_config_entry, "switch", "enabled")
+        assert hass.states.get(switch_id) is not None
