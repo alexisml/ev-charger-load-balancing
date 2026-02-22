@@ -1,48 +1,71 @@
-"""Tests for entity state restoration after Home Assistant restart.
+"""Tests for entity initialization, state restoration, and coordinator sync.
 
-Verifies that RestoreSensor, RestoreNumber, and RestoreEntity entities
-correctly persist their state across HA restarts.  This is critical for
-HACS release readiness — users expect the charger to continue from its
-last known state after a reboot rather than resetting to defaults.
+These tests verify how EV load balancer entities behave on a fresh install
+(with no restore cache) and after a simulated restart (with cached state).
+They also confirm that entity values synchronize with the coordinator so
+the balancing algorithm uses the correct runtime parameters.
 
 Tests cover:
-- Sensors (current_set, available_current, last_action_reason, balancer_state, configured_fallback)
-  restore their last known values on startup
-- Number entities (max_charger_current, min_ev_current) restore their last known values and sync
-  with the coordinator
-- Binary sensors (active, meter_status, fallback_active) restore their last known values
-- Switch (enabled) restores its last known value and syncs with the coordinator
-- current_set sensor syncs its restored value back into the coordinator
+- Default states for sensors, numbers, binary sensors, and switches on fresh setup
+- Coordinator sync: entity values feed into the coordinator on startup
+- State restoration: switch, binary sensors, sensors, and number entities
+  restore their last known values from the HA restore cache
+- Config entry unload/reload cycle completes without errors
 """
 
-from homeassistant.core import HomeAssistant, State
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
 
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     mock_restore_cache,
+    mock_restore_cache_with_extra_data,
 )
 
 from custom_components.ev_lb.const import DOMAIN
 from conftest import setup_integration, get_entity_id
 
+# Entity IDs are deterministic: derived from the device name
+# ("EV Charger Load Balancer") and the entity translation key.
+_SWITCH_ENABLED = "switch.ev_charger_load_balancer_load_balancing_enabled"
+_SENSOR_CURRENT_SET = "sensor.ev_charger_load_balancer_charging_current_set"
+_NUMBER_MAX_CHARGER = "number.ev_charger_load_balancer_max_charger_current"
+_NUMBER_MIN_EV = "number.ev_charger_load_balancer_min_ev_current"
+_BINARY_ACTIVE = "binary_sensor.ev_charger_load_balancer_load_balancing_active"
+_BINARY_METER = "binary_sensor.ev_charger_load_balancer_power_meter_status"
+_BINARY_FALLBACK = "binary_sensor.ev_charger_load_balancer_meter_fallback_active"
+
 
 # ---------------------------------------------------------------------------
-# Sensor restoration
+# Sensor defaults and coordinator sync
 # ---------------------------------------------------------------------------
 
 
-class TestSensorRestore:
-    """Sensor entities resume their last known values after a Home Assistant restart."""
+class TestSensorDefaults:
+    """Sensor entities use correct default values and sync with the coordinator on fresh setup."""
 
-    async def test_current_set_sensor_restores_value(
+    async def test_current_set_defaults_to_zero(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Coordinator initializes current_set to zero on fresh setup when no restore data is available."""
+        await setup_integration(hass, mock_config_entry)
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        assert coordinator.current_set_a == 0.0
+
+    async def test_current_set_restores_from_cache(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Charger continues at its last known current after a restart instead of dropping to zero."""
-        mock_restore_cache(
+        mock_restore_cache_with_extra_data(
             hass,
-            [State(f"sensor.{DOMAIN}_mock_id_current_set", "16.0")],
+            [
+                (
+                    State(_SENSOR_CURRENT_SET, "16.0"),
+                    {"native_value": 16.0, "native_unit_of_measurement": "A"},
+                ),
+            ],
         )
         await setup_integration(hass, mock_config_entry)
 
@@ -50,27 +73,20 @@ class TestSensorRestore:
             hass, mock_config_entry, "sensor", "current_set"
         )
         state = hass.states.get(current_set_id)
-        # The entity restores; verify it is present and has a valid state.
         assert state is not None
-
-    async def test_current_set_syncs_to_coordinator(
-        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
-    ) -> None:
-        """Restored current_set value feeds back into the coordinator so balancing continues seamlessly."""
-        await setup_integration(hass, mock_config_entry)
+        assert float(state.state) == 16.0
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        # On fresh setup with no restore data, coordinator starts at 0
-        assert coordinator.current_set_a == 0.0
+        assert coordinator.current_set_a == 16.0
 
 
 # ---------------------------------------------------------------------------
-# Number entity restoration
+# Number entity defaults, coordinator sync, and restoration
 # ---------------------------------------------------------------------------
 
 
-class TestNumberRestore:
-    """Number entities resume their last known values after a Home Assistant restart."""
+class TestNumberDefaultsAndSync:
+    """Number entities use correct defaults, sync to the coordinator, and restore previous values."""
 
     async def test_max_charger_current_syncs_to_coordinator_on_fresh_setup(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
@@ -90,14 +106,76 @@ class TestNumberRestore:
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         assert coordinator.min_ev_current == 6.0
 
+    async def test_max_charger_current_restores_from_cache(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """User's configured max charger current is restored after restart and applied to balancing."""
+        mock_restore_cache_with_extra_data(
+            hass,
+            [
+                (
+                    State(_NUMBER_MAX_CHARGER, "25.0"),
+                    {
+                        "native_max_value": 80.0,
+                        "native_min_value": 1.0,
+                        "native_step": 1.0,
+                        "native_unit_of_measurement": "A",
+                        "native_value": 25.0,
+                    },
+                ),
+            ],
+        )
+        await setup_integration(hass, mock_config_entry)
+
+        max_current_id = get_entity_id(
+            hass, mock_config_entry, "number", "max_charger_current"
+        )
+        state = hass.states.get(max_current_id)
+        assert state is not None
+        assert float(state.state) == 25.0
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        assert coordinator.max_charger_current == 25.0
+
+    async def test_min_ev_current_restores_from_cache(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """User's configured minimum EV current is restored after restart and applied to balancing."""
+        mock_restore_cache_with_extra_data(
+            hass,
+            [
+                (
+                    State(_NUMBER_MIN_EV, "8.0"),
+                    {
+                        "native_max_value": 32.0,
+                        "native_min_value": 1.0,
+                        "native_step": 1.0,
+                        "native_unit_of_measurement": "A",
+                        "native_value": 8.0,
+                    },
+                ),
+            ],
+        )
+        await setup_integration(hass, mock_config_entry)
+
+        min_ev_id = get_entity_id(
+            hass, mock_config_entry, "number", "min_ev_current"
+        )
+        state = hass.states.get(min_ev_id)
+        assert state is not None
+        assert float(state.state) == 8.0
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        assert coordinator.min_ev_current == 8.0
+
 
 # ---------------------------------------------------------------------------
-# Switch restoration
+# Switch defaults, coordinator sync, and restoration
 # ---------------------------------------------------------------------------
 
 
-class TestSwitchRestore:
-    """Switch entity resumes its last known state after a Home Assistant restart."""
+class TestSwitchDefaultsAndSync:
+    """Switch defaults to enabled on fresh setup and restores its last known state."""
 
     async def test_switch_defaults_to_on(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
@@ -114,34 +192,34 @@ class TestSwitchRestore:
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         assert coordinator.enabled is True
 
-    async def test_switch_restore_syncs_coordinator(
+    async def test_switch_restores_off_state(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Coordinator reflects the switch state after setup."""
+        """Coordinator and switch restore the last saved state after setup."""
         mock_restore_cache(
             hass,
-            [State(f"switch.{DOMAIN}_mock_id_enabled", "off")],
+            [State(_SWITCH_ENABLED, "off")],
         )
         await setup_integration(hass, mock_config_entry)
 
-        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        # Even with mock_restore_cache, unique_id-based matching may not match
-        # our entry-id-based unique IDs. Verify the coordinator state is consistent
-        # with the entity state.
         switch_id = get_entity_id(
             hass, mock_config_entry, "switch", "enabled"
         )
         state = hass.states.get(switch_id)
-        assert coordinator.enabled == (state.state == "on")
+        assert state is not None
+        assert state.state == "off"
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        assert coordinator.enabled is False
 
 
 # ---------------------------------------------------------------------------
-# Binary sensor restoration
+# Binary sensor defaults
 # ---------------------------------------------------------------------------
 
 
-class TestBinarySensorRestore:
-    """Binary sensor entities resume their last known state after a restart."""
+class TestBinarySensorDefaults:
+    """Binary sensor entities use expected default states on a fresh install."""
 
     async def test_active_binary_sensor_defaults_off(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry

@@ -13,15 +13,15 @@ PR-7-MVP is the final stabilization milestone before the integration can be inst
 ## What changed
 
 - **`custom_components/ev_lb/manifest.json`**: Fixed `documentation` and `issue_tracker` URLs — they pointed to `alexisml/ev-charger-load-balancing` instead of the correct `alexisml/ha-ev-charger-balancer`.
-- **`tests/test_restore_state.py`** (new): Added 10 tests covering entity state restoration after HA restart — sensors, numbers, binary sensors, switch, and coordinator sync. Also tests unload/reload cycle.
+- **`tests/test_entity_initialization.py`** (new): Added 12 tests covering entity defaults on fresh setup, state restoration from cache (sensor, number, switch), coordinator sync, and unload/reload cycle.
 - **`README.md`**: Updated status line from "working toward PR-7-MVP" to "PR-7-MVP complete; working toward PR-8-MVP: User manual".
 - **`docs/documentation/milestones/01-2026-02-19-mvp-plan.md`**: Marked PR-7-MVP as ✅ Done.
 
 ## Design decisions
 
-### 1. Restore-entity tests focus on coordinator sync, not mock restore cache round-tripping
+### 1. Entity initialization and restoration tests
 
-The `mock_restore_cache` utility requires entity IDs that match the actual entities created by the integration. Since entity IDs are generated from the config entry ID (which changes per test run), the restore tests focus on verifying the coordinator sync mechanism works correctly — that is, when entities are added to HA, they correctly sync their values with the coordinator. This is more valuable than testing the generic HA RestoreEntity mechanism which is well-tested upstream.
+The test file `test_entity_initialization.py` covers both fresh-setup defaults and actual state restoration from the HA restore cache. For `RestoreEntity` entities (switch, binary sensors), `mock_restore_cache` provides state data for `async_get_last_state()`. For `RestoreSensor` and `RestoreNumber` entities, `mock_restore_cache_with_extra_data` provides the extra stored data as a plain dict (not as a data class instance). The entity IDs used in the cache are deterministic, derived from the device name ("EV Charger Load Balancer") and the entity translation key.
 
 ### 2. Manifest URL fix
 
@@ -33,7 +33,7 @@ The version remains `0.1.0` as this is a pre-release stabilization milestone. A 
 
 ## Test coverage
 
-After this PR, the test suite contains **168 tests** covering:
+After this PR, the test suite contains **170 tests** covering:
 
 | Test module | Tests | Coverage area |
 |---|---|---|
@@ -46,14 +46,15 @@ After this PR, the test suite contains **168 tests** covering:
 | `test_balancer_state.py` | 16 | State sensor transitions, meter health, fallback, configured fallback |
 | `test_logging.py` | 10 | Debug/info/warning log messages for all operational states |
 | `test_set_limit_service.py` | 10 | Service registration, clamping, actions, one-shot override, lifecycle |
-| `test_restore_state.py` | 10 | Entity restoration, coordinator sync, reload cycle |
+| `test_entity_initialization.py` | 12 | Entity defaults, state restoration from cache, coordinator sync, reload cycle |
 | `test_load_balancer.py` | 39 | Pure logic: available current, clamping, distribution, ramp-up |
 | `test_load_balancer.py` (extras) | 23 | Multi-charger distribution, step behavior, edge cases |
 
 ## Lessons learned
 
 - Manifest URLs should be verified against the actual GitHub repository name early in the project — a mismatch breaks HACS discovery and issue reporting links.
-- The `mock_restore_cache` utility works best when entity IDs are known ahead of time; with entry-ID-based unique IDs, it's more practical to test coordinator sync behavior rather than restore cache round-tripping.
+- `mock_restore_cache_with_extra_data` expects extra data as a plain dict (`Mapping[str, Any]`), NOT as a data class instance. Passing `SensorExtraStoredData(...)` or `NumberExtraStoredData(...)` directly causes `from_dict` deserialization failures. Use `{"native_value": 16.0, ...}` instead.
+- Entity IDs in `mock_restore_cache` must match the actual HA-generated entity IDs, which are derived from the device name and translation key (e.g., `switch.ev_charger_load_balancer_load_balancing_enabled`), NOT from the unique ID or config entry ID.
 
 ## What's next
 
