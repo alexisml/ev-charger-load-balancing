@@ -46,7 +46,7 @@ class TestSensorDefaultsAndRestore:
     async def test_current_set_defaults_to_zero(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Coordinator initializes current_set to zero on fresh setup when no restore data is available."""
+        """Charger target current starts at zero on a fresh install when no prior charging state exists."""
         await setup_integration(hass, mock_config_entry)
 
         current_set_id = get_entity_id(
@@ -96,7 +96,7 @@ class TestNumberDefaultsAndSync:
     async def test_max_charger_current_syncs_to_coordinator_on_fresh_setup(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Max charger current is synced to coordinator using its default on a fresh install."""
+        """Max charger current uses its default value on a fresh install and is available for balancing calculations."""
         await setup_integration(hass, mock_config_entry)
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
@@ -105,7 +105,7 @@ class TestNumberDefaultsAndSync:
     async def test_min_ev_current_syncs_to_coordinator_on_fresh_setup(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Min EV current is synced to coordinator using its default on a fresh install."""
+        """Minimum EV current uses its default value on a fresh install and is available for balancing calculations."""
         await setup_integration(hass, mock_config_entry)
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
