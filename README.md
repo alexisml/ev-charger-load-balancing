@@ -4,6 +4,7 @@
 [![Ruff](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/ruff.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/ruff.yml)
 [![Type Check](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/type-check.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/type-check.yml)
 [![Spell Check](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/spell-check.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/spell-check.yml)
+[![HACS Validation](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/hacs-validate.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/hacs-validate.yml)
 [![Gitleaks](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/gitleaks.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/alexisml/ha-ev-charger-balancer/blob/main/.github/dependabot.yml)
 [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Falexisml%2F7107fdc2a20719f22bc6fe9f80eba710%2Fraw%2Fev_lb_test_count.json)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
