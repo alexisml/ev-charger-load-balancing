@@ -261,7 +261,14 @@ If you want to charge only from solar surplus, create a template sensor that sub
 
 ### What happens during a Home Assistant restart?
 
-All entity states are restored. The charger current stays at its last known value until the first power-meter event triggers a new computation. No commands are sent until fresh meter data arrives. See [How It Works — Restart behavior](how-it-works.md#home-assistant-restart-behavior).
+All entity states are restored. The coordinator defers all meter evaluation until `EVENT_HOMEASSISTANT_STARTED` fires (i.e., after every integration has loaded). Once HA is fully started:
+
+- If the power meter is **healthy**: the integration waits for the first meter reading and then resumes normal operation.
+- If the power meter is **unavailable**: the configured fallback is applied immediately (stop charging, ignore, or set a specific current).
+
+This ensures that integrations providing the power meter (energy monitors, DSMR readers, etc.) have had time to connect before the load balancer evaluates the meter state.
+
+See [How It Works — Restart behavior](how-it-works.md#home-assistant-restart-behavior).
 
 ### How fast does it react to load changes?
 
@@ -269,7 +276,7 @@ The balancer is event-driven and reacts on the same HA event-loop tick as the po
 
 ### Can I change the ramp-up cooldown time?
 
-The ramp-up cooldown is currently fixed at 30 seconds. A future update may expose this as a configurable option.
+Yes. The ramp-up cooldown defaults to 30 seconds and is adjustable via `number.*_ramp_up_cooldown` in the entity dashboard. The allowed range is 5–300 seconds. Lower values respond faster but risk oscillation on spiky loads; 20–30 s is recommended for most installations.
 
 ### Can I use multiple chargers?
 
