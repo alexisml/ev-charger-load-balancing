@@ -51,15 +51,11 @@ This catches HACS compliance issues before they reach users.
 
 ### Release workflow (`.github/workflows/release.yml`)
 
-Two trigger modes:
-
-1. **`workflow_dispatch` (recommended)** — click "Run workflow" in the Actions tab. The workflow:
-   - Runs `scripts/bump_version.py` to compute the next version
-   - Updates `manifest.json` with `--apply`
-   - Commits, tags (`vYYYY.M.N`), and pushes
-   - Creates a GitHub release with auto-generated notes and a zip asset
-
-2. **Tag push (fallback)** — push a `v*` tag manually. The workflow verifies `manifest.json` matches the tag, then creates the release.
+Triggered via `workflow_dispatch` — click "Run workflow" in the Actions tab. The workflow:
+- Runs `scripts/bump_version.py` to compute the next version
+- Updates `manifest.json` with `--apply`
+- Commits, tags (`vYYYY.M.N`), and pushes
+- Creates a GitHub release with auto-generated notes and a zip asset
 
 ### README badge
 
@@ -67,17 +63,8 @@ Added a HACS Validation badge to the README alongside existing CI badges.
 
 ## How to create a release
 
-### Automatic (recommended)
-
 1. Go to **Actions → Release → Run workflow**.
 2. The workflow computes the next version, updates `manifest.json`, tags, and creates the release automatically.
-
-### Manual
-
-1. Run `python scripts/bump_version.py --apply` to update `manifest.json`.
-2. Commit and push to `main`.
-3. Create and push a matching git tag: `git tag v2026.2.0 && git push origin v2026.2.0`.
-4. The release workflow creates the GitHub release.
 
 ## How to get into the HACS default repository list
 
