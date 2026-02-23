@@ -194,7 +194,7 @@ stateDiagram-v2
 
 ### Resume sequence
 
-When charging resumes after being stopped, `start_charging` is called **before** `set_current`. This ensures the charger is ready to accept current before a target is set. Both calls are `blocking: true`, so `set_current` waits for `start_charging` to complete.
+When charging resumes after being stopped, `start_charging` is called **before** `set_current`. This ensures the charger is ready to accept current before a target is set. Both calls are `blocking: true`, so each script call waits for the **entire script** to finish executing before the next action is fired. This means if your `start_charging` script contains delays or multi-step sequences, `set_current` will not be called until they complete.
 
 ---
 
@@ -265,6 +265,8 @@ Check your OCPP charger's device page in Home Assistant (**Settings → Devices 
 ```
 
 > **Why `limit_amps: 6` for start_charging?** OCPP does not have a dedicated "resume" command. Setting the minimum allowed current (6 A per IEC 61851) signals the charger to begin accepting current. The integration immediately calls `set_current` after `start_charging`, so the 6 A is replaced by the actual computed target within the same HA event-loop task.
+
+> **Your script can contain any actions you need.** The example above is a minimal starting point. Since scripts support the full HA action syntax, you can add steps like toggling an enable/disable switch, calling a notify service, or adding a delay. Some chargers also require a hardware restart (e.g., `ocpp.reset`) to charge from a complete dead-stop — if that applies to yours, add it as the first step in your `start_charging` script. All three action scripts are optional, so only configure the ones your hardware requires.
 
 > **Testing tip:** Before wiring up these scripts to the integration, test each one manually from **Developer Tools → Actions** by calling `script.turn_on` with the relevant variables (e.g., `variables: {current_a: 10, current_w: 2300, charger_id: test}`). Confirm your charger responds as expected.
 
