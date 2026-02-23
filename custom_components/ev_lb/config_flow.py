@@ -6,7 +6,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, OptionsFlow
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.selector import (
     EntitySelector,
@@ -55,7 +55,7 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
 
     @staticmethod
     def async_get_options_flow(
-        config_entry,
+        config_entry: ConfigEntry,
     ) -> EvLbOptionsFlow:
         """Return the options flow handler."""
         return EvLbOptionsFlow(config_entry)

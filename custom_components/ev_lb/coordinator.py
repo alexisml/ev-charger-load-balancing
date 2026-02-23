@@ -378,7 +378,7 @@ class EvLoadBalancerCoordinator:
             )
             target = 0.0 if clamped is None else clamped
         else:
-            # stop mode
+            # UNAVAILABLE_BEHAVIOR_STOP: stop charging
             target = 0.0
 
         if target != self.current_set_a:
@@ -437,7 +437,7 @@ class EvLoadBalancerCoordinator:
             )
             return fallback
 
-        # Default: stop charging
+        # UNAVAILABLE_BEHAVIOR_STOP (or unrecognised value): stop charging as the safest default
         _LOGGER.warning(
             "Power meter %s is unavailable — stopping charging (0 A)",
             self._power_meter_entity,
