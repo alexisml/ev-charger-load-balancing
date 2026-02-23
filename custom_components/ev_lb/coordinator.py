@@ -698,9 +698,11 @@ class EvLoadBalancerCoordinator:
     ) -> None:
         """Call a configured action script with the given variables.
 
-        Silently skips when the action is not configured.  Logs a warning
-        and continues when the service call fails so that a single broken
-        script does not prevent the remaining actions from executing.
+        Silently skips when the action is not configured.  When the script
+        call fails for any reason, logs a warning, fires an
+        ``ev_lb_action_failed`` event, creates a persistent dashboard
+        notification, and continues so that a single broken script does not
+        prevent the remaining actions from executing.
         """
         if not entity_id:
             return

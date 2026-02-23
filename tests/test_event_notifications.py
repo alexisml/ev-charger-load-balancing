@@ -414,7 +414,7 @@ class TestNoSpuriousEvents:
 
 
 class TestActionFailedEvent:
-    """HA event fires when a charger action script fails, enabling error-alerting automations."""
+    """Dashboard notification and HA event alert the user when a charger action script fails."""
 
     async def test_action_failed_event_fires_on_script_error(
         self, hass: HomeAssistant, mock_config_entry_with_actions: MockConfigEntry
@@ -456,10 +456,11 @@ class TestActionFailedEvent:
             entry_id=mock_config_entry_with_actions.entry_id
         ) in str(call_kwargs)
 
-    async def test_action_failed_with_unexpected_exception_creates_notification(
+    async def test_action_failed_creates_notification_for_any_error_type(
         self, hass: HomeAssistant, mock_config_entry_with_actions: MockConfigEntry
     ) -> None:
-        """A persistent notification is created even when the script raises an unexpected non-HA exception."""
+        """A persistent notification is shown on the dashboard even when the charger script
+        fails with an unrecognised error type."""
         with patch(PN_CREATE) as mock_create, patch(
             "homeassistant.core.ServiceRegistry.async_call",
             side_effect=RuntimeError("Unexpected failure"),
