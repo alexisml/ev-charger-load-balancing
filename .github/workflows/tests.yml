@@ -71,7 +71,7 @@ jobs:
           import xml.etree.ElementTree as ET
           tree = ET.parse('results/junit.xml')
           root = tree.getroot()
-          print(root.attrib.get('tests', '0'))
+          print(sum(int(ts.attrib.get('tests', '0')) for ts in root.iter('testsuite')))
           ")
           echo "TEST_COUNT=$TEST_COUNT" >> "$GITHUB_ENV"
 
@@ -81,6 +81,7 @@ jobs:
       - name: Update test count badge
         if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.BADGE_GIST_ID != ''
         uses: schneegans/dynamic-badges-action@v1.7.0
+        continue-on-error: true
         with:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: ${{ vars.BADGE_GIST_ID }}
@@ -92,6 +93,7 @@ jobs:
       - name: Update lines-of-code badge
         if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.BADGE_GIST_ID != ''
         uses: schneegans/dynamic-badges-action@v1.7.0
+        continue-on-error: true
         with:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: ${{ vars.BADGE_GIST_ID }}
