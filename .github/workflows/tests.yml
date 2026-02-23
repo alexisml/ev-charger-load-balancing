@@ -56,3 +56,46 @@ jobs:
           fail_ci_if_error: false
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      # --- Dynamic README badges (requires one-time setup) ---
+      # 1. Create a public gist (any content).
+      # 2. Add repository secret  GIST_SECRET  = a PAT with `gist` scope.
+      # 3. Add repository variable BADGE_GIST_ID = the gist ID.
+      # 4. Update the badge URLs in README.md with the gist ID.
+      # The steps below are skipped automatically when secrets are not configured.
+
+      - name: Extract badge metrics
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          TEST_COUNT=$(python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('results/junit.xml')
+          root = tree.getroot()
+          print(root.attrib.get('tests', '0'))
+          ")
+          echo "TEST_COUNT=$TEST_COUNT" >> "$GITHUB_ENV"
+
+          LOC=$(find custom_components -name '*.py' -exec cat {} + | wc -l)
+          echo "LOC=$LOC" >> "$GITHUB_ENV"
+
+      - name: Update test count badge
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.BADGE_GIST_ID != ''
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: ${{ vars.BADGE_GIST_ID }}
+          filename: ev_lb_test_count.json
+          label: tests
+          message: ${{ env.TEST_COUNT }} passed
+          color: brightgreen
+
+      - name: Update lines-of-code badge
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.BADGE_GIST_ID != ''
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: ${{ vars.BADGE_GIST_ID }}
+          filename: ev_lb_loc.json
+          label: lines of code
+          message: ${{ env.LOC }}
+          color: blue
