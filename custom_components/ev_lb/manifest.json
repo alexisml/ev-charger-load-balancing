@@ -1,11 +1,13 @@
 {
   "domain": "ev_lb",
   "name": "EV Charger Load Balancing",
-  "version": "2026.2.0",
+  "version": "2026.2.1",
   "documentation": "https://github.com/alexisml/ha-ev-charger-balancer",
   "issue_tracker": "https://github.com/alexisml/ha-ev-charger-balancer/issues",
   "dependencies": [],
-  "codeowners": ["@alexisml"],
+  "codeowners": [
+    "@alexisml"
+  ],
   "config_flow": true,
   "iot_class": "local_push",
   "requirements": []
