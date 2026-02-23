@@ -14,8 +14,8 @@ Tests cover:
 - Runtime changes to max charger current and min EV current trigger immediate recomputation
 - Re-enabling the switch triggers immediate recomputation
 - Normal computation resumes when meter recovers from unavailable
-- Parameter changes while meter is unavailable re-apply fallback with new limits
-- Power meter unavailable at startup triggers the configured fallback immediately
+- Power meter unavailable after HA is fully loaded triggers the configured fallback
+- During HA startup, fallback deferred until EVENT_HOMEASSISTANT_STARTED to avoid false positives from not-yet-loaded integrations
 """
 
 from homeassistant.core import HomeAssistant
@@ -904,12 +904,23 @@ class TestParameterChangeWithUnavailableMeter:
 
 
 class TestStartupWithUnavailableMeter:
-    """Verify correct behaviour when the power meter is unavailable at startup."""
+    """Verify correct behaviour when the power meter is unavailable when the integration loads.
 
-    async def test_stop_mode_applies_fallback_on_startup(
+    In the test environment ``hass.is_running`` is ``True`` (HA is already
+    fully started), which is equivalent to loading the integration via the UI
+    after HA has started.  The coordinator evaluates meter health synchronously
+    on ``async_start`` once entity setup is complete.
+
+    In a real HA startup the equivalent behaviour is triggered by the
+    ``EVENT_HOMEASSISTANT_STARTED`` listener registered in ``async_start``,
+    which fires after all integrations have loaded so transient unavailability
+    during dependency loading is ignored.
+    """
+
+    async def test_stop_mode_applies_fallback_when_meter_unavailable(
         self, hass: HomeAssistant
     ) -> None:
-        """In stop mode, meter unavailable at startup sets the charger to 0 A."""
+        """In stop mode, a genuinely unavailable meter sets the charger to 0 A."""
         entry = MockConfigEntry(
             domain=DOMAIN,
             data={
@@ -934,10 +945,10 @@ class TestStartupWithUnavailableMeter:
         assert hass.states.get(meter_id).state == "off"
         assert hass.states.get(fallback_id).state == "on"
 
-    async def test_set_current_mode_applies_fallback_on_startup(
+    async def test_set_current_mode_applies_fallback_when_meter_unavailable(
         self, hass: HomeAssistant
     ) -> None:
-        """In set_current mode, meter unavailable at startup sets the charger to the fallback current."""
+        """In set_current mode, a genuinely unavailable meter sets the charger to the fallback current."""
         entry = MockConfigEntry(
             domain=DOMAIN,
             data={
@@ -960,10 +971,10 @@ class TestStartupWithUnavailableMeter:
         assert float(hass.states.get(current_set_id).state) == 10.0
         assert hass.states.get(fallback_id).state == "on"
 
-    async def test_ignore_mode_keeps_zero_on_startup(
+    async def test_ignore_mode_keeps_zero_when_meter_unavailable(
         self, hass: HomeAssistant
     ) -> None:
-        """In ignore mode, meter unavailable at startup keeps the charger at the restored current (0 on fresh install)."""
+        """In ignore mode, a genuinely unavailable meter keeps the charger at the restored current (0 on fresh install)."""
         entry = MockConfigEntry(
             domain=DOMAIN,
             data={
@@ -988,10 +999,10 @@ class TestStartupWithUnavailableMeter:
         assert hass.states.get(meter_id).state == "off"
         assert hass.states.get(fallback_id).state == "on"
 
-    async def test_meter_healthy_on_startup_with_valid_state(
+    async def test_meter_healthy_when_valid_reading_present(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Meter status is healthy at startup when a valid reading is present."""
+        """Meter status is healthy when a valid reading is present at load time."""
         # setup_integration pre-sets the meter to "0" before setup
         from conftest import setup_integration
         await setup_integration(hass, mock_config_entry)

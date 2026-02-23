@@ -15,6 +15,7 @@ from __future__ import annotations
 import time
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
@@ -163,16 +164,25 @@ class EvLoadBalancerCoordinator:
             self._unavailable_behavior,
         )
 
-        # Sync meter health flags if meter is already unavailable at startup
-        meter_state = self.hass.states.get(self._power_meter_entity)
-        if meter_state is None or meter_state.state in ("unavailable", "unknown"):
-            self.meter_healthy = False
-            self.fallback_active = True
-            # Schedule a deferred fallback so entity dispatcher connections
-            # (established in async_added_to_hass, which runs after async_start)
-            # receive the initial health flags and any required charger actions.
-            self.hass.async_create_task(
-                self._async_apply_startup_fallback(), eager_start=False
+        if self.hass.is_running:
+            # Integration was loaded after HA finished starting (e.g., added
+            # via the UI).  Entity platforms are already fully set up and
+            # dispatcher connections are live, so meter health can be evaluated
+            # and the fallback applied synchronously right now.
+            meter_state = self.hass.states.get(self._power_meter_entity)
+            if meter_state is None or meter_state.state in ("unavailable", "unknown"):
+                self.meter_healthy = False
+                self.fallback_active = True
+                self._apply_fallback_current()
+        else:
+            # HA is still loading — dependent integrations may not have
+            # registered their entities yet, so a missing or unavailable meter
+            # state is likely transient.  Defer the health check until HA
+            # reports it is fully started to avoid spurious warnings and
+            # premature charger actions.
+            self.hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED,
+                self._handle_ha_started,
             )
 
     @callback
@@ -183,20 +193,32 @@ class EvLoadBalancerCoordinator:
             self._unsub_listener = None
         _LOGGER.debug("Coordinator stopped")
 
-    async def _async_apply_startup_fallback(self) -> None:
-        """Apply fallback behavior when the power meter is unavailable at startup.
+    @callback
+    def _handle_ha_started(self, _event: Event) -> None:
+        """Evaluate meter health once HA has fully started.
 
-        Runs as a deferred task so that all entity platforms have had a chance
-        to call ``async_added_to_hass`` and register their dispatcher listeners
-        before the initial state update is dispatched.  Without this deferral
-        the dispatcher signal fired in :meth:`async_start` would be received by
-        no entities (they subscribe only inside ``async_added_to_hass``).
+        Called exactly once via ``EVENT_HOMEASSISTANT_STARTED``, at which
+        point every integration has had a chance to register its entities.
+        A missing or unavailable power-meter state at this point is a genuine
+        problem rather than a transient startup artefact.
+
+        Guards against the entry being unloaded before HA finishes starting
+        by checking whether the state-change listener is still active.
         """
+        if self._unsub_listener is None:
+            # Coordinator was stopped before HA finished starting — nothing to do
+            return
+
+        meter_state = self.hass.states.get(self._power_meter_entity)
+        if meter_state is None or meter_state.state in ("unavailable", "unknown"):
+            self.meter_healthy = False
+            self.fallback_active = True
+            self._apply_fallback_current()
         _LOGGER.debug(
-            "Power meter %s is unavailable at startup — applying configured fallback",
+            "HA started — power meter %s is %s",
             self._power_meter_entity,
+            "unavailable" if not self.meter_healthy else "healthy",
         )
-        self._apply_fallback_current()
 
     # ------------------------------------------------------------------
     # Event handler
