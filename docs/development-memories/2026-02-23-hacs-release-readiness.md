@@ -81,5 +81,4 @@ To appear in the **default** HACS repository list (so users find it by searching
 - **Versioning scheme:** Calendar versioning `YYYY.M.N` matching Home Assistant convention.
 - **Tag format:** `v2026.2.0` (with `v` prefix) — this is the most common convention for GitHub releases and avoids ambiguity with branch names.
 - **Version generation:** Automated via `scripts/bump_version.py` — inspects git tags + current date.
-- **Version verification:** The release workflow verifies that `manifest.json` version matches the tag to prevent mismatches (tag-push path).
 - **Release asset:** A zip of `custom_components/ev_lb/` is attached for users who prefer manual installation.
