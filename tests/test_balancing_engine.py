@@ -19,6 +19,9 @@ Tests cover:
   from not-yet-loaded integrations
 """
 
+from unittest.mock import patch, PropertyMock
+
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -34,6 +37,7 @@ from custom_components.ev_lb.const import (
     UNAVAILABLE_BEHAVIOR_SET_CURRENT,
     UNAVAILABLE_BEHAVIOR_STOP,
 )
+from custom_components.ev_lb.coordinator import EvLoadBalancerCoordinator
 from conftest import POWER_METER, setup_integration, get_entity_id
 
 
@@ -526,6 +530,32 @@ class TestRuntimeParameterChanges:
         value = float(hass.states.get(current_set_id).state)
         assert value > 0
 
+    async def test_parameter_change_silently_skipped_when_meter_state_is_unparsable(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Parameter change while meter state is non-numeric (but not unavailable) is silently skipped."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # Set meter to a value that is not "unavailable"/"unknown" but cannot be parsed as float
+        hass.states.async_set(POWER_METER, "not_a_number")
+        await hass.async_block_till_done()
+
+        # Trigger async_recompute_from_current_state via a number entity change
+        max_current_id = get_entity_id(
+            hass, mock_config_entry, "number", "max_charger_current"
+        )
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": max_current_id, "value": 20.0},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        # Integration must not crash; the new parameter is recorded
+        assert coordinator.max_charger_current == 20.0
+
 
 # ---------------------------------------------------------------------------
 # Unavailable behavior modes
@@ -1014,3 +1044,81 @@ class TestStartupWithUnavailableMeter:
 
         assert coordinator.meter_healthy is True
         assert hass.states.get(meter_id).state == "on"
+
+
+# ---------------------------------------------------------------------------
+# Deferred startup: coordinator registered before HA finishes loading
+# ---------------------------------------------------------------------------
+
+
+class TestCoordinatorDeferredStartup:
+    """Coordinator defers meter health evaluation when HA is still starting up.
+
+    When an integration loads during the HA boot sequence (not via UI after
+    startup), ``hass.is_running`` is ``False``.  The coordinator registers a
+    one-shot listener for ``EVENT_HOMEASSISTANT_STARTED`` and only evaluates
+    meter health once HA reports it has fully loaded, avoiding spurious
+    fallback actions from not-yet-registered dependency entities.
+    """
+
+    async def test_deferred_startup_registers_ha_started_listener(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Coordinator registers a startup listener instead of checking the meter immediately during HA boot."""
+        coordinator = EvLoadBalancerCoordinator(hass, mock_config_entry)
+
+        with patch.object(
+            type(hass), "is_running", new_callable=PropertyMock, return_value=False
+        ):
+            coordinator.async_start()
+
+        # State-change listener is active; meter health has not been evaluated yet
+        assert coordinator._unsub_listener is not None
+        assert coordinator.meter_healthy is True  # Default, not yet evaluated
+
+        coordinator.async_stop()
+
+    async def test_deferred_startup_applies_fallback_when_meter_unavailable_at_ha_start(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Fallback is applied when the meter is still unavailable when HA finishes loading."""
+        hass.states.async_set(POWER_METER, "unavailable")
+        coordinator = EvLoadBalancerCoordinator(hass, mock_config_entry)
+
+        with patch.object(
+            type(hass), "is_running", new_callable=PropertyMock, return_value=False
+        ):
+            coordinator.async_start()
+
+        # Fire the HA started event — meter is still unavailable
+        hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED, {})
+        await hass.async_block_till_done()
+
+        assert coordinator.meter_healthy is False
+        assert coordinator.fallback_active is True
+        assert coordinator.current_set_a == 0.0  # Stop mode (default)
+
+        coordinator.async_stop()
+
+    async def test_deferred_startup_no_action_when_coordinator_already_stopped(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Entry unloaded before HA finishes starting — the deferred event callback does nothing."""
+        coordinator = EvLoadBalancerCoordinator(hass, mock_config_entry)
+
+        with patch.object(
+            type(hass), "is_running", new_callable=PropertyMock, return_value=False
+        ):
+            coordinator.async_start()
+
+        # Unload the coordinator before HA fires EVENT_HOMEASSISTANT_STARTED
+        coordinator.async_stop()
+        assert coordinator._unsub_listener is None
+
+        # Fire the event — the guard inside _handle_ha_started should prevent any action
+        hass.states.async_set(POWER_METER, "unavailable")
+        hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED, {})
+        await hass.async_block_till_done()
+
+        # Coordinator remains in its initial state — callback did nothing
+        assert coordinator.meter_healthy is True

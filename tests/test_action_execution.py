@@ -11,6 +11,7 @@ Tests cover:
 - Fallback-to-stop triggers stop_charging action
 - Meter recovery triggers start_charging + set_current when resuming from stop
 - Options flow allows changing action scripts after initial setup
+- Partial action script configuration: unconfigured actions are silently skipped
 """
 
 import pytest
@@ -25,6 +26,9 @@ from custom_components.ev_lb.const import (
     CONF_ACTION_SET_CURRENT,
     CONF_ACTION_START_CHARGING,
     CONF_ACTION_STOP_CHARGING,
+    CONF_MAX_SERVICE_CURRENT,
+    CONF_POWER_METER_ENTITY,
+    CONF_VOLTAGE,
     DOMAIN,
 )
 from conftest import (
@@ -382,3 +386,57 @@ class TestOptionsFlow:
         assert options[CONF_ACTION_SET_CURRENT] == SET_CURRENT_SCRIPT
         assert options[CONF_ACTION_STOP_CHARGING] == STOP_CHARGING_SCRIPT
         assert options[CONF_ACTION_START_CHARGING] == START_CHARGING_SCRIPT
+
+
+# ---------------------------------------------------------------------------
+# Partial action configuration
+# ---------------------------------------------------------------------------
+
+
+class TestPartialActionConfiguration:
+    """Unconfigured action scripts are silently skipped; configured ones still fire."""
+
+    async def test_unconfigured_stop_and_start_actions_are_silently_skipped(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Only the configured set_current action fires; stop and start are skipped when absent."""
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+                CONF_ACTION_SET_CURRENT: SET_CURRENT_SCRIPT,
+                # CONF_ACTION_STOP_CHARGING and CONF_ACTION_START_CHARGING intentionally omitted
+            },
+            title="EV Load Balancing",
+        )
+        calls = async_mock_service(hass, "script", "turn_on")
+        hass.states.async_set(POWER_METER, "0")
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+        coordinator.ramp_up_time_s = 0.0
+
+        # Start charging — start_charging action is not configured so it is skipped;
+        # set_current still fires because it is configured.
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+
+        assert coordinator.active is True
+        start_calls = [c for c in calls if c.data["entity_id"] == START_CHARGING_SCRIPT]
+        assert len(start_calls) == 0  # Not configured → skipped
+        set_calls = [c for c in calls if c.data["entity_id"] == SET_CURRENT_SCRIPT]
+        assert len(set_calls) == 1  # Configured → fired
+
+        calls.clear()
+
+        # Stop charging — stop_charging action is not configured so it is skipped.
+        hass.states.async_set(POWER_METER, "12000")
+        await hass.async_block_till_done()
+
+        assert coordinator.active is False
+        stop_calls = [c for c in calls if c.data["entity_id"] == STOP_CHARGING_SCRIPT]
+        assert len(stop_calls) == 0  # Not configured → skipped
