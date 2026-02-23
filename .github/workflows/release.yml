@@ -31,6 +31,11 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           BRANCH="release/v${VERSION}"
 
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            echo "::warning::Branch $BRANCH already exists — a release PR for $VERSION is already open. No new PR was created."
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
