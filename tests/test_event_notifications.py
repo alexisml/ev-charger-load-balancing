@@ -24,6 +24,7 @@ from custom_components.ev_lb.const import (
     EVENT_FALLBACK_ACTIVATED,
     EVENT_METER_UNAVAILABLE,
     EVENT_OVERLOAD_STOP,
+    NOTIFICATION_ACTION_FAILED_FMT,
     NOTIFICATION_FALLBACK_ACTIVATED_FMT,
     NOTIFICATION_METER_UNAVAILABLE_FMT,
     NOTIFICATION_OVERLOAD_STOP_FMT,
@@ -436,3 +437,39 @@ class TestActionFailedEvent:
         assert events[0]["action_name"] in ("start_charging", "set_current")
         assert "error" in events[0]
         assert "Script not found" in events[0]["error"]
+
+    async def test_action_failed_creates_persistent_notification(
+        self, hass: HomeAssistant, mock_config_entry_with_actions: MockConfigEntry
+    ) -> None:
+        """A persistent notification warns the user when a charger action script fails."""
+        with patch(PN_CREATE) as mock_create, patch(
+            "homeassistant.core.ServiceRegistry.async_call",
+            side_effect=HomeAssistantError("Script not found"),
+        ):
+            await setup_integration(hass, mock_config_entry_with_actions)
+            hass.states.async_set(POWER_METER, "3000")
+            await hass.async_block_till_done()
+
+        mock_create.assert_called()
+        call_kwargs = mock_create.call_args
+        assert NOTIFICATION_ACTION_FAILED_FMT.format(
+            entry_id=mock_config_entry_with_actions.entry_id
+        ) in str(call_kwargs)
+
+    async def test_action_failed_with_unexpected_exception_creates_notification(
+        self, hass: HomeAssistant, mock_config_entry_with_actions: MockConfigEntry
+    ) -> None:
+        """A persistent notification is created even when the script raises an unexpected non-HA exception."""
+        with patch(PN_CREATE) as mock_create, patch(
+            "homeassistant.core.ServiceRegistry.async_call",
+            side_effect=RuntimeError("Unexpected failure"),
+        ):
+            await setup_integration(hass, mock_config_entry_with_actions)
+            hass.states.async_set(POWER_METER, "3000")
+            await hass.async_block_till_done()
+
+        mock_create.assert_called()
+        call_kwargs = mock_create.call_args
+        assert NOTIFICATION_ACTION_FAILED_FMT.format(
+            entry_id=mock_config_entry_with_actions.entry_id
+        ) in str(call_kwargs)
