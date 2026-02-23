@@ -512,3 +512,17 @@ class TestDistributeCurrentBoundaries:
         result = distribute_current(available_a=8.0, chargers=[(4.0, 32.0), (8.0, 32.0)])
         assert result[0] == 8.0
         assert result[1] is None
+
+    def test_max_less_than_min_stops_charger(self):
+        """A misconfigured charger whose maximum is less than its minimum is stopped rather than operated unsafely."""
+        # max_a=5 < min_a=10: no valid operating point exists → charger must stop
+        result = distribute_current(available_a=30.0, chargers=[(10.0, 5.0)])
+        assert result == [None]
+
+    def test_max_less_than_min_mixed_with_valid_charger(self):
+        """A misconfigured charger stops while a correctly configured charger keeps running."""
+        # Charger A: min=10 max=5 (invalid) → must stop
+        # Charger B: min=6 max=32 (valid) → receives all available current
+        result = distribute_current(available_a=20.0, chargers=[(10.0, 5.0), (6.0, 32.0)])
+        assert result[0] is None
+        assert result[1] == 20.0

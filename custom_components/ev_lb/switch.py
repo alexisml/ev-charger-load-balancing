@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -29,7 +29,6 @@ class EvLbEnabledSwitch(SwitchEntity, RestoreEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "enabled"
-    _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_is_on = True
 
     def __init__(
