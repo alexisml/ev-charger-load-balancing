@@ -168,6 +168,12 @@ class EvLoadBalancerCoordinator:
         if meter_state is None or meter_state.state in ("unavailable", "unknown"):
             self.meter_healthy = False
             self.fallback_active = True
+            # Schedule a deferred fallback so entity dispatcher connections
+            # (established in async_added_to_hass, which runs after async_start)
+            # receive the initial health flags and any required charger actions.
+            self.hass.async_create_task(
+                self._async_apply_startup_fallback(), eager_start=False
+            )
 
     @callback
     def async_stop(self) -> None:
@@ -176,6 +182,21 @@ class EvLoadBalancerCoordinator:
             self._unsub_listener()
             self._unsub_listener = None
         _LOGGER.debug("Coordinator stopped")
+
+    async def _async_apply_startup_fallback(self) -> None:
+        """Apply fallback behavior when the power meter is unavailable at startup.
+
+        Runs as a deferred task so that all entity platforms have had a chance
+        to call ``async_added_to_hass`` and register their dispatcher listeners
+        before the initial state update is dispatched.  Without this deferral
+        the dispatcher signal fired in :meth:`async_start` would be received by
+        no entities (they subscribe only inside ``async_added_to_hass``).
+        """
+        _LOGGER.debug(
+            "Power meter %s is unavailable at startup — applying configured fallback",
+            self._power_meter_entity,
+        )
+        self._apply_fallback_current()
 
     # ------------------------------------------------------------------
     # Event handler
@@ -249,12 +270,13 @@ class EvLoadBalancerCoordinator:
         state = self.hass.states.get(self._power_meter_entity)
         if state is None or state.state in ("unavailable", "unknown"):
             _LOGGER.debug(
-                "Parameter changed but power meter is %s — skipping recompute",
+                "Parameter changed but power meter is %s "
+                "— reapplying fallback with updated parameter limits",
                 state.state if state else "missing",
             )
             self.meter_healthy = False
             self.fallback_active = True
-            async_dispatcher_send(self.hass, self.signal_update)
+            self._reapply_fallback_limits()
             return
 
         try:
@@ -306,6 +328,45 @@ class EvLoadBalancerCoordinator:
     # ------------------------------------------------------------------
     # Fallback for unavailable power meter
     # ------------------------------------------------------------------
+
+    def _reapply_fallback_limits(self) -> None:
+        """Reapply the fallback current enforcing updated charger parameter limits.
+
+        Called when a runtime parameter (e.g. max charger current or min EV
+        current) changes while the power meter is already unavailable.  Unlike
+        :meth:`_apply_fallback_current`, this method does **not** re-fire fault
+        events or persistent notifications — those were already issued when the
+        meter first became unavailable.
+
+        Covers all three fallback modes:
+
+        - **stop**: applies 0 A (idempotent; action scripts only fire when
+          transitioning from active to stopped).
+        - **set_current**: recomputes ``min(fallback, new_max_charger)`` and
+          updates the charger if the capped value differs.
+        - **ignore**: re-clamps ``current_set_a`` to the new charger limits
+          and updates if the value has changed.
+        """
+        if self._unavailable_behavior == UNAVAILABLE_BEHAVIOR_SET_CURRENT:
+            target = min(self._unavailable_fallback_a, self.max_charger_current)
+        elif self._unavailable_behavior == UNAVAILABLE_BEHAVIOR_IGNORE:
+            clamped = clamp_current(
+                self.current_set_a, self.max_charger_current, self.min_ev_current
+            )
+            target = 0.0 if clamped is None else clamped
+        else:
+            # stop mode
+            target = 0.0
+
+        if target != self.current_set_a:
+            _LOGGER.debug(
+                "Fallback current updated after parameter change: %.1f A → %.1f A",
+                self.current_set_a,
+                target,
+            )
+            self._update_and_notify(self.available_current_a, target, REASON_PARAMETER_CHANGE)
+        else:
+            async_dispatcher_send(self.hass, self.signal_update)
 
     def _apply_fallback_current(self) -> None:
         """Handle the power meter becoming unavailable or unknown.
