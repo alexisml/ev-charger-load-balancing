@@ -31,21 +31,10 @@ from conftest import (
     START_CHARGING_SCRIPT,
     setup_integration,
     get_entity_id,
+    collect_events,
+    PN_CREATE,
+    PN_DISMISS,
 )
-
-PN_CREATE = "custom_components.ev_lb.coordinator.pn_async_create"
-PN_DISMISS = "custom_components.ev_lb.coordinator.pn_async_dismiss"
-
-
-def _collect_events(hass: HomeAssistant, event_type: str) -> list[dict]:
-    """Subscribe to an event type and return a list of captured event data dicts."""
-    captured: list[dict] = []
-
-    def _listener(event):
-        captured.append(dict(event.data))
-
-    hass.bus.async_listen(event_type, _listener)
-    return captured
 
 
 # ---------------------------------------------------------------------------
@@ -270,8 +259,8 @@ class TestOverloadWithEventAndActionChain:
             active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
             state_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "balancer_state")
 
-            overload_events = _collect_events(hass, EVENT_OVERLOAD_STOP)
-            resumed_events = _collect_events(hass, EVENT_CHARGING_RESUMED)
+            overload_events = collect_events(hass, EVENT_OVERLOAD_STOP)
+            resumed_events = collect_events(hass, EVENT_CHARGING_RESUMED)
 
             # Phase 1: Start charging at 18 A
             hass.states.async_set(POWER_METER, "3000")

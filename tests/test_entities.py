@@ -24,25 +24,7 @@ from custom_components.ev_lb.const import (
     STATE_STOPPED,
     UNAVAILABLE_BEHAVIOR_STOP,
 )
-from conftest import POWER_METER
-
-
-async def _setup_entry(
-    hass: HomeAssistant, entry: MockConfigEntry
-) -> None:
-    """Add and set up the config entry with a healthy power meter state.
-
-    Mirrors :func:`conftest.setup_integration` in that the power-meter
-    entity is pre-set to a valid reading before setup so the coordinator
-    does not trigger the startup-unavailable fallback.  This keeps these
-    entity-setup tests focused on the entity wiring rather than fallback
-    behaviour.
-    """
-    hass.states.async_set(POWER_METER, "0")
-    entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert entry.state is ConfigEntryState.LOADED
+from conftest import setup_integration
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +39,7 @@ class TestDeviceRegistration:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """A device entry is created for the charger."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         dev_reg = dr.async_get(hass)
         device = dev_reg.async_get_device(
@@ -71,7 +53,7 @@ class TestDeviceRegistration:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """All entities share the same device identifier."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entries = er.async_entries_for_config_entry(
@@ -99,7 +81,7 @@ class TestUniqueIds:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Each entity's unique ID starts with the config entry ID."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entries = er.async_entries_for_config_entry(
@@ -139,7 +121,7 @@ class TestSensorEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Current-set sensor starts at 0."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entry = ent_reg.async_get_entity_id(
@@ -154,7 +136,7 @@ class TestSensorEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Available-current sensor starts at 0."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entry = ent_reg.async_get_entity_id(
@@ -169,7 +151,7 @@ class TestSensorEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Last action reason is unknown before any events occur."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -184,7 +166,7 @@ class TestSensorEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Balancer state sensor reports 'stopped' on fresh install before any meter events."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -199,7 +181,7 @@ class TestSensorEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Configured fallback sensor shows the default fallback behavior on fresh install."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -223,7 +205,7 @@ class TestBinarySensorEntity:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Active binary sensor starts as off."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entry = ent_reg.async_get_entity_id(
@@ -238,7 +220,7 @@ class TestBinarySensorEntity:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Meter status binary sensor reports healthy (on) on fresh install."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -253,7 +235,7 @@ class TestBinarySensorEntity:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Fallback active binary sensor reports no fallback (off) on fresh install."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -277,7 +259,7 @@ class TestNumberEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Max charger current number starts at default."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -292,7 +274,7 @@ class TestNumberEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Min EV current number starts at default."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -307,7 +289,7 @@ class TestNumberEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Max charger current number can be set to a new value."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -326,7 +308,7 @@ class TestNumberEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Min EV current number can be set to a new value."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -345,7 +327,7 @@ class TestNumberEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Ramp-up cooldown number starts at the default (30 s)."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -360,7 +342,7 @@ class TestNumberEntities:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Ramp-up cooldown number can be updated and the new value is reflected in the coordinator."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         ent_reg = er.async_get(hass)
@@ -390,7 +372,7 @@ class TestSwitchEntity:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Enabled switch starts as on."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -405,7 +387,7 @@ class TestSwitchEntity:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Enabled switch can be turned off."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -424,7 +406,7 @@ class TestSwitchEntity:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Enabled switch can be turned back on."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entity_id = ent_reg.async_get_entity_id(
@@ -453,7 +435,7 @@ class TestUnload:
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """All entity states become unavailable when the config entry is unloaded."""
-        await _setup_entry(hass, mock_config_entry)
+        await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
         entries_before = er.async_entries_for_config_entry(

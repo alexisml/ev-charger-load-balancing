@@ -31,21 +31,10 @@ from conftest import (
     POWER_METER,
     setup_integration,
     get_entity_id,
+    collect_events,
+    PN_CREATE,
+    PN_DISMISS,
 )
-
-PN_CREATE = "custom_components.ev_lb.coordinator.pn_async_create"
-PN_DISMISS = "custom_components.ev_lb.coordinator.pn_async_dismiss"
-
-
-def _collect_events(hass: HomeAssistant, event_type: str) -> list[dict]:
-    """Subscribe to an event type and return a list of captured event data dicts."""
-    captured: list[dict] = []
-
-    def _listener(event):
-        captured.append(dict(event.data))
-
-    hass.bus.async_listen(event_type, _listener)
-    return captured
 
 
 # ---------------------------------------------------------------------------
@@ -76,8 +65,8 @@ class TestMeterFailureAndRecovery:
             fallback_active_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "fallback_active")
             reason_id = get_entity_id(hass, mock_config_entry, "sensor", "last_action_reason")
 
-            meter_events = _collect_events(hass, EVENT_METER_UNAVAILABLE)
-            resumed_events = _collect_events(hass, EVENT_CHARGING_RESUMED)
+            meter_events = collect_events(hass, EVENT_METER_UNAVAILABLE)
+            resumed_events = collect_events(hass, EVENT_CHARGING_RESUMED)
 
             # Phase 1: Normal charging
             hass.states.async_set(POWER_METER, "3000")
@@ -140,7 +129,7 @@ class TestMeterFailureAndRecovery:
             meter_status_id = get_entity_id(hass, mock_config_entry_fallback, "binary_sensor", "meter_status")
             fallback_active_id = get_entity_id(hass, mock_config_entry_fallback, "binary_sensor", "fallback_active")
 
-            fallback_events = _collect_events(hass, EVENT_FALLBACK_ACTIVATED)
+            fallback_events = collect_events(hass, EVENT_FALLBACK_ACTIVATED)
 
             # Phase 1: Normal charging at 18 A
             hass.states.async_set(POWER_METER, "3000")
@@ -192,8 +181,8 @@ class TestMeterFailureAndRecovery:
         active_id = get_entity_id(hass, mock_config_entry_ignore, "binary_sensor", "active")
         meter_status_id = get_entity_id(hass, mock_config_entry_ignore, "binary_sensor", "meter_status")
 
-        meter_events = _collect_events(hass, EVENT_METER_UNAVAILABLE)
-        fallback_events = _collect_events(hass, EVENT_FALLBACK_ACTIVATED)
+        meter_events = collect_events(hass, EVENT_METER_UNAVAILABLE)
+        fallback_events = collect_events(hass, EVENT_FALLBACK_ACTIVATED)
 
         # Phase 1: Normal charging at 18 A
         hass.states.async_set(POWER_METER, "3000")

@@ -29,6 +29,7 @@ from custom_components.ev_lb.load_balancer import (
 
 
 class TestComputeAvailableCurrentBasic:
+    """Basic scenarios for compute_available_current: verify the formula produces correct headroom values."""
     def test_no_ev_load(self):
         """With no EV charging, available = service_limit - house_load."""
         # 5 kW total @ 230 V → ~21.7 A; limit 32 A → ~10.3 A headroom
@@ -96,6 +97,7 @@ class TestComputeAvailableCurrentBasic:
 
 
 class TestClampCurrent:
+    """Verify clamp_current correctly bounds the target current and returns None when charging must stop."""
     def test_available_within_limits(self):
         """Charger receives its target current when headroom is within safe operating limits."""
         result = clamp_current(available_a=20.0, max_charger_a=32.0, min_charger_a=6.0)
@@ -153,6 +155,7 @@ class TestClampCurrent:
 
 
 class TestDistributeCurrentSingleCharger:
+    """Single-charger scenarios for distribute_current: verify correct allocation and stop conditions."""
     def test_single_charger_gets_available(self):
         """Single charger receives the full available current (up to its maximum)."""
         result = distribute_current(available_a=20.0, chargers=[(6.0, 32.0)])
@@ -180,6 +183,7 @@ class TestDistributeCurrentSingleCharger:
 
 
 class TestDistributeCurrentMultiCharger:
+    """Multi-charger scenarios: verify fair-share allocation, cap redistribution, and all-stopped edge cases."""
     def test_two_chargers_equal_split(self):
         """Two identical chargers receive equal share."""
         result = distribute_current(available_a=24.0, chargers=[(6.0, 16.0), (6.0, 16.0)])
@@ -242,6 +246,7 @@ class TestDistributeCurrentMultiCharger:
 
 
 class TestDistributeCurrentStepBehaviour:
+    """Verify that distribute_current floors each allocation to the configured step size."""
     def test_step_applied_to_fair_share(self):
         """Each charger's allocation is floored to the nearest 1 A step."""
         # Available: 25 A; 2 chargers; fair share = 12.5 A → floored to 12 A
