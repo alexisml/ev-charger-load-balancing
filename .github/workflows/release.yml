@@ -17,6 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          # Full history needed for workflow_dispatch to read existing git tags
           fetch-depth: 0
 
       - name: Compute next version
@@ -37,7 +38,7 @@ jobs:
           git add custom_components/ev_lb/manifest.json
           git commit -m "Bump version to $VERSION"
           git tag "v$VERSION"
-          git push origin HEAD:${{ github.ref_name }} --tags
+          git push origin HEAD:main --tags
 
       - name: Extract version from tag
         if: github.event_name == 'push'
