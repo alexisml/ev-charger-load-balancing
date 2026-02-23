@@ -25,7 +25,7 @@ Five event types are available:
 | `ev_lb_overload_stop` | Household load exceeds the service limit and charging is stopped | ✅ Created |
 | `ev_lb_fallback_activated` | Power meter becomes unavailable and fallback current is applied (set-current mode) | ✅ Created |
 | `ev_lb_charging_resumed` | Charging resumes after being stopped | ❌ (dismisses overload notification) |
-| `ev_lb_action_failed` | A charger action script fails | ❌ |
+| `ev_lb_action_failed` | A charger action script fails | ✅ Created |
 
 ---
 
@@ -86,23 +86,26 @@ Fired when a configured charger action script raises an error during execution.
 
 ## Persistent notifications
 
-For the three fault conditions (meter unavailable, overload, fallback), the integration also creates **persistent notifications** visible on the HA dashboard. These are automatically dismissed when the fault resolves:
+For the four fault conditions (meter unavailable, overload, fallback, action failed), the integration also creates **persistent notifications** visible on the HA dashboard. The fault notifications are automatically dismissed when the fault resolves:
 
 ```mermaid
 flowchart LR
     F1["Meter unavailable<br/>(stop mode)"] --> N1["🔔 Notification created"]
     F2["Overload stop"] --> N2["🔔 Notification created"]
     F3["Fallback activated"] --> N3["🔔 Notification created"]
+    F4["Action script failed"] --> N4["🔔 Notification created"]
 
     N1 --> R1["Meter recovers → dismissed ✅"]
     N2 --> R2["Charging resumes → dismissed ✅"]
     N3 --> R3["Meter recovers → dismissed ✅"]
+    N4 --> R4["User dismisses manually"]
 ```
 
 - **Meter unavailable / fallback** notifications are dismissed when the meter recovers (next valid power reading).
 - **Overload** notification is dismissed when charging resumes.
+- **Action failed** notification remains until dismissed manually — check your script configuration and then dismiss it from the HA dashboard.
 
-No user action is needed to clear them.
+No user action is needed to clear the fault notifications (meter/overload/fallback).
 
 ---
 

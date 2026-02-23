@@ -88,6 +88,7 @@ EVENT_ACTION_FAILED = f"{DOMAIN}_action_failed"
 NOTIFICATION_METER_UNAVAILABLE_FMT = f"{DOMAIN}_meter_unavailable_{{entry_id}}"
 NOTIFICATION_OVERLOAD_STOP_FMT = f"{DOMAIN}_overload_stop_{{entry_id}}"
 NOTIFICATION_FALLBACK_ACTIVATED_FMT = f"{DOMAIN}_fallback_activated_{{entry_id}}"
+NOTIFICATION_ACTION_FAILED_FMT = f"{DOMAIN}_action_failed_{{entry_id}}"
 
 
 def get_device_info(entry: ConfigEntry) -> DeviceInfo:

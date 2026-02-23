@@ -201,8 +201,8 @@ When charging resumes after being stopped, `start_charging` is called **before**
 ## Error handling
 
 - **Script not configured:** The action is silently skipped. No error is logged.
-- **Script call fails:** A warning is logged, but the integration continues operating. Other actions are not affected — for example, if `start_charging` fails, `set_current` will still be attempted.
-- **Script entity does not exist:** Treated as a call failure — a warning is logged and the integration continues.
+- **Script call fails:** A warning is logged, an `ev_lb_action_failed` event is fired, and a persistent notification is created on the HA dashboard so you can see the problem at a glance. The integration continues operating — other actions are not affected. For example, if `start_charging` fails, `set_current` will still be attempted.
+- **Script entity does not exist:** Treated as a call failure — a warning is logged, the event is fired, a persistent notification is created, and the integration continues.
 
 ---
 

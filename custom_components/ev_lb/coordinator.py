@@ -16,7 +16,6 @@ import time
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -44,6 +43,7 @@ from .const import (
     EVENT_FALLBACK_ACTIVATED,
     EVENT_METER_UNAVAILABLE,
     EVENT_OVERLOAD_STOP,
+    NOTIFICATION_ACTION_FAILED_FMT,
     NOTIFICATION_FALLBACK_ACTIVATED_FMT,
     NOTIFICATION_METER_UNAVAILABLE_FMT,
     NOTIFICATION_OVERLOAD_STOP_FMT,
@@ -698,9 +698,11 @@ class EvLoadBalancerCoordinator:
     ) -> None:
         """Call a configured action script with the given variables.
 
-        Silently skips when the action is not configured.  Logs a warning
-        and continues when the service call fails so that a single broken
-        script does not prevent the remaining actions from executing.
+        Silently skips when the action is not configured.  When the script
+        call fails for any reason, logs a warning, fires an
+        ``ev_lb_action_failed`` event, creates a persistent dashboard
+        notification, and continues so that a single broken script does not
+        prevent the remaining actions from executing.
         """
         if not entity_id:
             return
@@ -722,19 +724,32 @@ class EvLoadBalancerCoordinator:
                 entity_id,
                 variables or {},
             )
-        except HomeAssistantError as exc:
+        except Exception as exc:  # noqa: BLE001 — catch all so a broken script never crashes the integration
             _LOGGER.warning(
                 "Action %s failed via %s: %s",
                 action_name,
                 entity_id,
                 exc,
             )
+            entry_id = self.entry.entry_id
             self.hass.bus.async_fire(
                 EVENT_ACTION_FAILED,
                 {
-                    "entry_id": self.entry.entry_id,
+                    "entry_id": entry_id,
                     "action_name": action_name,
                     "entity_id": entity_id,
                     "error": str(exc),
                 },
+            )
+            pn_async_create(
+                self.hass,
+                (
+                    f"Action script `{entity_id}` failed for action `{action_name}`: "
+                    f"{exc}. "
+                    "Check your charger action script configuration."
+                ),
+                title="EV Load Balancer — Action Failed",
+                notification_id=NOTIFICATION_ACTION_FAILED_FMT.format(
+                    entry_id=entry_id
+                ),
             )
