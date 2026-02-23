@@ -53,8 +53,14 @@ This catches HACS compliance issues before they reach users.
 
 Triggered via `workflow_dispatch` — click "Run workflow" in the Actions tab. The workflow:
 - Runs `scripts/bump_version.py` to compute the next version
-- Updates `manifest.json` with `--apply`
-- Commits, tags (`vYYYY.M.N`), and pushes
+- Creates a `release/vYYYY.M.N` branch, applies the version bump, and pushes it
+- Opens a PR targeting `main` titled "Bump version to YYYY.M.N"
+
+### Publish workflow (`.github/workflows/publish.yml`)
+
+Triggered automatically when `custom_components/ev_lb/manifest.json` is pushed to `main` (i.e., when the release PR is merged). The workflow:
+- Reads the version from `manifest.json`
+- Creates and pushes the `vYYYY.M.N` tag
 - Creates a GitHub release with auto-generated notes and a zip asset
 
 ### README badge
@@ -64,7 +70,9 @@ Added a HACS Validation badge to the README alongside existing CI badges.
 ## How to create a release
 
 1. Go to **Actions → Release → Run workflow**.
-2. The workflow computes the next version, updates `manifest.json`, tags, and creates the release automatically.
+2. The workflow computes the next version, creates a `release/vX.Y.Z` branch, applies the version bump, and opens a PR.
+3. Review and merge the PR into `main`.
+4. Merging triggers the **Publish Release** workflow automatically, which creates the tag and GitHub release.
 
 ## How to get into the HACS default repository list
 
