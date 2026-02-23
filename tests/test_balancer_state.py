@@ -154,6 +154,31 @@ class TestBalancerStateSensor:
 
         assert coordinator.balancer_state == STATE_DISABLED
 
+    async def test_disabled_state_updates_immediately_on_switch_off(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Balancer state sensor shows 'disabled' immediately when the switch is turned off.
+
+        No further power meter event should be needed to observe the state change.
+        """
+        await setup_integration(hass, mock_config_entry)
+
+        # Start with an active charging state
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+
+        entity_id = get_entity_id(hass, mock_config_entry, "sensor", "balancer_state")
+        assert hass.states.get(entity_id).state != STATE_DISABLED
+
+        switch_id = get_entity_id(hass, mock_config_entry, "switch", "enabled")
+        await hass.services.async_call(
+            "switch", "turn_off", {"entity_id": switch_id}, blocking=True
+        )
+        await hass.async_block_till_done()
+
+        # State must be disabled without any further power meter event
+        assert hass.states.get(entity_id).state == STATE_DISABLED
+
     async def test_sensor_entity_reflects_coordinator_state(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:

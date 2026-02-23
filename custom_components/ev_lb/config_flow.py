@@ -67,7 +67,7 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
         """Handle the initial step."""
         # Single-instance protection: only one config entry is allowed.
         # Multi-charger and multi-instance support are planned for a future PR
-        # (see docs/development/2026-02-19-research-plan.md, PR-5/PR-6).
+        # (see docs/development-memories/2026-02-19-research-plan.md).
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
 
