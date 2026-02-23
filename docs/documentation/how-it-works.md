@@ -171,8 +171,8 @@ The balancer is **event-driven** — it does not poll on a timer. A recomputatio
 | Trigger | What happens | Speed |
 |---|---|---|
 | **Power meter state change** | Sensor reports a new Watt value. The coordinator reads it and runs the full algorithm. | Instant — same HA event-loop tick. |
-| **Max charger current changed** | User or automation changes the number entity. Coordinator re-reads the current meter value and recomputes. | Instant. |
-| **Min EV current changed** | Same as above. If the new minimum is higher than the current target, charging stops immediately. | Instant. |
+| **Max charger current changed** | User or automation changes the number entity. If meter is available, coordinator re-reads the current meter value and recomputes. If meter is unavailable, the fallback limit is re-applied with the new cap. | Instant. |
+| **Min EV current changed** | Same as above. If the new minimum is higher than the current target, charging stops immediately even while the meter is unavailable. | Instant. |
 | **Load balancing re-enabled** | The switch is turned back on. Full recomputation using current meter value. | Instant. |
 
 > **When load balancing is disabled** (switch is off), power-meter events are ignored. The charger current stays at its last value. No action is taken until the switch is turned back on.
@@ -306,6 +306,18 @@ flowchart TD
 
 > **Monitoring meter health:** Use `binary_sensor.*_power_meter_status` (On = healthy) and `binary_sensor.*_meter_fallback_active` (On = fallback in effect) in dashboards or automations to track meter reliability.
 
+### Changing parameters while the meter is unavailable
+
+If you change `number.*_max_charger_current` or `number.*_min_ev_current` while the meter is already unavailable, the fallback limits are immediately re-applied to the new values:
+
+| Mode | Effect of lowering charger max | Effect of raising min EV current |
+|---|---|---|
+| **Stop** | No change (already 0 A) | No change (already 0 A) |
+| **Ignore** | Current is immediately clamped to the new maximum | If the held current drops below the new minimum, charging stops |
+| **Set specific current** | Fallback is recomputed as `min(configured_fallback, new_max_charger)` | No effect (fallback is a fixed value, not subject to minimum) |
+
+This means the charger is always kept within safe hardware limits, even during a meter outage.
+
 ---
 
 ## Manual override
@@ -339,19 +351,28 @@ sequenceDiagram
 
     HA->>LB: Startup — load integration
     LB->>Sensors: Restore last known values<br/>(current, headroom, state, switch)
-    Note over LB: Charger stays at last known current<br/>No commands sent yet
-    Meter->>LB: First valid power reading
-    LB->>LB: Run full recomputation
-    LB->>Sensors: Update all entities
-    Note over LB: Normal operation resumes
+    Note over LB: No commands sent yet<br/>Waiting for HA to fully start
+    HA->>LB: EVENT_HOMEASSISTANT_STARTED<br/>(all integrations loaded)
+    LB->>Meter: Check meter state
+    alt Meter is unavailable
+        LB->>LB: Apply configured fallback<br/>(stop / ignore / set_current)
+        LB->>Sensors: Update entity states
+    else Meter is healthy
+        Note over LB: Wait for first meter event
+        Meter->>LB: First valid power reading
+        LB->>LB: Run full recomputation
+        LB->>Sensors: Update all entities
+        Note over LB: Normal operation resumes
+    end
 ```
 
 1. Sensors restore their last known values (current set, available current, balancer state).
 2. Number entities restore runtime parameters (max charger current, min EV current, ramp-up cooldown).
 3. The switch restores its enabled/disabled state.
-4. The coordinator waits for the first power-meter event before taking any action.
+4. The coordinator defers all meter health checks until **Home Assistant has fully started** (after `EVENT_HOMEASSISTANT_STARTED`). This ensures that dependent integrations — such as your energy monitor or smart meter — have had time to register their entities before the integration evaluates whether the power meter is available.
+5. Once HA is fully started: if the meter is unavailable, the configured fallback is applied immediately. If the meter is healthy, the integration waits for the first power-meter reading.
 
-> **Between restart and the first meter event**, the charger current stays at whatever it was before the restart. No commands are sent until fresh meter data arrives. This avoids unnecessary spikes or drops on startup.
+> **Why defer until HA is fully started?** The power meter entity often comes from another integration (e.g., a cloud energy monitor, DSMR reader, or Shelly). That integration may not have finished loading when `ev_lb` starts. Checking the meter state too early would trigger spurious "meter unavailable" warnings and charger actions even though the meter is perfectly fine — it just hasn't connected yet.
 
 ---
 

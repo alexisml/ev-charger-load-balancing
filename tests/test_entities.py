@@ -24,12 +24,21 @@ from custom_components.ev_lb.const import (
     STATE_STOPPED,
     UNAVAILABLE_BEHAVIOR_STOP,
 )
+from conftest import POWER_METER
 
 
 async def _setup_entry(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
-    """Add and set up the config entry."""
+    """Add and set up the config entry with a healthy power meter state.
+
+    Mirrors :func:`conftest.setup_integration` in that the power-meter
+    entity is pre-set to a valid reading before setup so the coordinator
+    does not trigger the startup-unavailable fallback.  This keeps these
+    entity-setup tests focused on the entity wiring rather than fallback
+    behaviour.
+    """
+    hass.states.async_set(POWER_METER, "0")
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
