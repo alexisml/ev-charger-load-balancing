@@ -95,7 +95,8 @@ fields:
 sequence:
   - action: ocpp.set_charge_rate
     data:
-      limit_amps: "{{ current_a }}"
+      limit_amps: "{{ current_a | int }}"
+      conn_id: 1
 ```
 
 #### Example: `stop_charging` script for OCPP
@@ -115,6 +116,7 @@ sequence:
   - action: ocpp.set_charge_rate
     data:
       limit_amps: 0
+      conn_id: 1
 ```
 
 #### Example: `start_charging` script for OCPP
@@ -131,11 +133,15 @@ fields:
     selector:
       text:
 sequence:
-  - action: ocpp.reset
-    data: {}
+  - action: ocpp.set_charge_rate
+    data:
+      limit_amps: 6
+      conn_id: 1
 ```
 
 > **Tip:** The exact service calls depend on your charger integration. The examples above use the [lbbrhzn/ocpp](https://github.com/lbbrhzn/ocpp) integration. Replace the `ocpp.*` actions with whatever services your charger integration exposes.
+>
+> **OCPP note:** OCPP does not have a dedicated "start charging" command. The `start_charging` script above sets the minimum allowed current (6 A) as a signal to the charger to begin accepting current — the integration then calls `set_current` immediately after with the actual target. Adjust `conn_id` to match your charger's connector number (most single-connector chargers use `1`).
 
 ### Step 2: Configure in the integration
 
@@ -188,7 +194,7 @@ stateDiagram-v2
 
 ### Resume sequence
 
-When charging resumes after being stopped, `start_charging` is called **before** `set_current`. This ensures the charger is ready to accept current before a target is set. Both calls are `blocking: true`, so `set_current` waits for `start_charging` to complete.
+When charging resumes after being stopped, `start_charging` is called **before** `set_current`. This ensures the charger is ready to accept current before a target is set. Both calls are `blocking: true`, so each script call waits for the **entire script** to finish executing before the next action is fired. This means if your `start_charging` script contains delays or multi-step sequences, `set_current` will not be called until they complete.
 
 ---
 
@@ -218,21 +224,51 @@ The scripts are the bridge between this integration and your specific charger. H
 
 ### OCPP chargers (lbbrhzn/ocpp)
 
+The [lbbrhzn/ocpp](https://github.com/lbbrhzn/ocpp) integration exposes an `ocpp.set_charge_rate` service that sets a charging profile on the charger. All three actions are implemented using this single service.
+
+**How OCPP charging control works:**
+
+- Setting `limit_amps` to a positive value resumes or adjusts charging.
+- Setting `limit_amps` to `0` pauses charging (the EVSE stops offering current to the car).
+- There is no dedicated "start" command in OCPP — chargers start charging automatically when a positive limit is set and a car is connected.
+- `conn_id` is the connector number. Most home chargers have one connector, so `conn_id: 1`. If your charger has multiple connectors, adjust accordingly.
+
+**Finding your `conn_id`:**
+
+Check your OCPP charger's device page in Home Assistant (**Settings → Devices & Services → OCPP → your charger**). The connector number is usually labelled or visible in the charger's entity names (e.g., `sensor.charger_current_import` vs `sensor.charger_2_current_import` for a second connector).
+
 ```yaml
-# set_current — use amps
+# set_current — set the charging rate in amps
 - action: ocpp.set_charge_rate
   data:
-    limit_amps: "{{ current_a }}"
+    limit_amps: "{{ current_a | int }}"
+    conn_id: 1
 
-# stop_charging
+# set_current — alternative: use watts if your charger prefers it
+- action: ocpp.set_charge_rate
+  data:
+    limit_watts: "{{ current_w | int }}"
+    conn_id: 1
+
+# stop_charging — set limit to 0 to pause charging
 - action: ocpp.set_charge_rate
   data:
     limit_amps: 0
+    conn_id: 1
 
-# start_charging
-- action: ocpp.reset
-  data: {}
+# start_charging — set minimum current to signal resume
+# (set_current is called immediately after with the actual target)
+- action: ocpp.set_charge_rate
+  data:
+    limit_amps: 6
+    conn_id: 1
 ```
+
+> **Why `limit_amps: 6` for start_charging?** OCPP does not have a dedicated "resume" command. Setting the minimum allowed current (6 A per IEC 61851) signals the charger to begin accepting current. The integration immediately calls `set_current` after `start_charging`, so the 6 A is replaced by the actual computed target within the same HA event-loop task.
+
+> **Your script can contain any actions you need.** The example above is a minimal starting point. Since scripts support the full HA action syntax, you can add steps like toggling an enable/disable switch, calling a notify service, or adding a delay. Some chargers also require a hardware restart (e.g., `ocpp.reset`) to charge from a complete dead-stop — if that applies to yours, add it as the first step in your `start_charging` script. All three action scripts are optional, so only configure the ones your hardware requires.
+
+> **Testing tip:** Before wiring up these scripts to the integration, test each one manually from **Developer Tools → Actions** by calling `script.turn_on` with the relevant variables (e.g., `variables: {current_a: 10, current_w: 2300, charger_id: test}`). Confirm your charger responds as expected.
 
 ### REST API chargers
 
