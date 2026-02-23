@@ -26,3 +26,7 @@ env/
 test-results/
 .coverage
 coverage.xml
+results/
+
+# Release artifacts
+*.zip
