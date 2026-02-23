@@ -29,26 +29,7 @@ from custom_components.ev_lb.const import (
     NOTIFICATION_METER_UNAVAILABLE_FMT,
     NOTIFICATION_OVERLOAD_STOP_FMT,
 )
-from conftest import POWER_METER, setup_integration
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-PN_CREATE = "custom_components.ev_lb.coordinator.pn_async_create"
-PN_DISMISS = "custom_components.ev_lb.coordinator.pn_async_dismiss"
-
-
-def _collect_events(hass: HomeAssistant, event_type: str) -> list[dict]:
-    """Subscribe to an event type and return a list of captured event data dicts."""
-    captured: list[dict] = []
-
-    def _listener(event):
-        captured.append(dict(event.data))
-
-    hass.bus.async_listen(event_type, _listener)
-    return captured
+from conftest import POWER_METER, setup_integration, collect_events, PN_CREATE, PN_DISMISS
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +45,7 @@ class TestMeterUnavailableEvent:
     ) -> None:
         """An event notifies automations when the power meter becomes unavailable and charging stops."""
         await setup_integration(hass, mock_config_entry)
-        events = _collect_events(hass, EVENT_METER_UNAVAILABLE)
+        events = collect_events(hass, EVENT_METER_UNAVAILABLE)
 
         # Start charging
         hass.states.async_set(POWER_METER, "3000")
@@ -139,7 +120,7 @@ class TestOverloadStopEvent:
     ) -> None:
         """An event notifies automations when household overload forces a charging stop."""
         await setup_integration(hass, mock_config_entry)
-        events = _collect_events(hass, EVENT_OVERLOAD_STOP)
+        events = collect_events(hass, EVENT_OVERLOAD_STOP)
 
         # Start charging at 18 A (3000 W)
         hass.states.async_set(POWER_METER, "3000")
@@ -191,7 +172,7 @@ class TestChargingResumedEvent:
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         coordinator.ramp_up_time_s = 0.0  # disable cooldown for clean resume
-        events = _collect_events(hass, EVENT_CHARGING_RESUMED)
+        events = collect_events(hass, EVENT_CHARGING_RESUMED)
 
         # Start charging at 18 A
         hass.states.async_set(POWER_METER, "3000")
@@ -244,7 +225,7 @@ class TestChargingResumedEvent:
     ) -> None:
         """The first charge from a stopped state fires a resumed event."""
         await setup_integration(hass, mock_config_entry)
-        events = _collect_events(hass, EVENT_CHARGING_RESUMED)
+        events = collect_events(hass, EVENT_CHARGING_RESUMED)
 
         # First power meter event with sufficient headroom → resume from 0
         hass.states.async_set(POWER_METER, "3000")
@@ -268,7 +249,7 @@ class TestFallbackActivatedEvent:
     ) -> None:
         """An event notifies automations when the fallback current is applied due to meter unavailability."""
         await setup_integration(hass, mock_config_entry_fallback)
-        events = _collect_events(hass, EVENT_FALLBACK_ACTIVATED)
+        events = collect_events(hass, EVENT_FALLBACK_ACTIVATED)
 
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
@@ -345,8 +326,8 @@ class TestIgnoreModeNoEvent:
     ) -> None:
         """The integration does not fire events when the user chose to ignore meter outages."""
         await setup_integration(hass, mock_config_entry_ignore)
-        meter_events = _collect_events(hass, EVENT_METER_UNAVAILABLE)
-        fallback_events = _collect_events(hass, EVENT_FALLBACK_ACTIVATED)
+        meter_events = collect_events(hass, EVENT_METER_UNAVAILABLE)
+        fallback_events = collect_events(hass, EVENT_FALLBACK_ACTIVATED)
 
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
@@ -377,9 +358,9 @@ class TestNoSpuriousEvents:
         await hass.async_block_till_done()
 
         # Now collect events after initial start
-        overload_events = _collect_events(hass, EVENT_OVERLOAD_STOP)
-        meter_events = _collect_events(hass, EVENT_METER_UNAVAILABLE)
-        resumed_events = _collect_events(hass, EVENT_CHARGING_RESUMED)
+        overload_events = collect_events(hass, EVENT_OVERLOAD_STOP)
+        meter_events = collect_events(hass, EVENT_METER_UNAVAILABLE)
+        resumed_events = collect_events(hass, EVENT_CHARGING_RESUMED)
 
         # Same power → no transition → no events
         hass.states.async_set(POWER_METER, "3000")
@@ -399,7 +380,7 @@ class TestNoSpuriousEvents:
         hass.states.async_set(POWER_METER, "9000")
         await hass.async_block_till_done()
 
-        overload_events = _collect_events(hass, EVENT_OVERLOAD_STOP)
+        overload_events = collect_events(hass, EVENT_OVERLOAD_STOP)
 
         # Still overloaded → stays stopped → no overload event
         hass.states.async_set(POWER_METER, "9500")
@@ -421,7 +402,7 @@ class TestActionFailedEvent:
     ) -> None:
         """An event notifies automations when a charger action script raises an error."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        events = _collect_events(hass, EVENT_ACTION_FAILED)
+        events = collect_events(hass, EVENT_ACTION_FAILED)
 
         # Make the script service call raise an error
         with patch(

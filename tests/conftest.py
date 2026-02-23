@@ -31,6 +31,10 @@ from custom_components.ev_lb.const import (
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Patch paths for persistent-notification helpers used across multiple test modules
+PN_CREATE = "custom_components.ev_lb.coordinator.pn_async_create"
+PN_DISMISS = "custom_components.ev_lb.coordinator.pn_async_dismiss"
+
 # -----------------------------------------------------------------------
 # Shared constants
 # -----------------------------------------------------------------------
@@ -122,7 +126,12 @@ def mock_config_entry_ignore() -> MockConfigEntry:
 
 
 async def setup_integration(hass: HomeAssistant, entry: MockConfigEntry) -> None:
-    """Set up the integration and create the power meter sensor."""
+    """Set up the integration and create the power meter sensor.
+
+    The power meter is pre-set to a valid reading (``"0"``) before setup
+    so the coordinator does not trigger the startup-unavailable fallback
+    from a not-yet-loaded sensor.
+    """
     hass.states.async_set(POWER_METER, "0")
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
@@ -140,3 +149,18 @@ def get_entity_id(
     )
     assert entity_id is not None
     return entity_id
+
+
+def collect_events(hass: HomeAssistant, event_type: str) -> list[dict]:
+    """Subscribe to an HA event type and return a list of captured event data dicts.
+
+    The returned list is populated in-place as events fire, so tests can
+    assert on it after triggering the relevant state changes.
+    """
+    captured: list[dict] = []
+
+    def _listener(event):
+        captured.append(dict(event.data))
+
+    hass.bus.async_listen(event_type, _listener)
+    return captured
