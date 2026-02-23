@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -15,20 +16,53 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        if: github.event_name == 'workflow_dispatch'
+        id: bump
+        run: |
+          VERSION=$(python3 scripts/bump_version.py)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Next version: $VERSION"
+
+      - name: Update manifest and create tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          python3 scripts/bump_version.py --apply
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add custom_components/ev_lb/manifest.json
+          git commit -m "Bump version to $VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD:${{ github.ref_name }} --tags
 
       - name: Extract version from tag
-        id: version
+        if: github.event_name == 'push'
+        id: tag_version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
       - name: Verify manifest version matches tag
+        if: github.event_name == 'push'
         run: |
           MANIFEST_VERSION=$(python3 -c "import json; print(json.load(open('custom_components/ev_lb/manifest.json'))['version'])")
-          TAG_VERSION="${{ steps.version.outputs.version }}"
+          TAG_VERSION="${{ steps.tag_version.outputs.version }}"
           if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
             echo "::error::manifest.json version ($MANIFEST_VERSION) does not match tag version ($TAG_VERSION)"
             exit 1
           fi
           echo "Version verified: $TAG_VERSION"
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ steps.bump.outputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ steps.tag_version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create release zip
         run: |
@@ -38,5 +72,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: "v${{ steps.version.outputs.version }}"
           generate_release_notes: true
           files: ev_lb.zip
