@@ -57,13 +57,6 @@ jobs:
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
-      # --- Dynamic README badges (requires one-time setup) ---
-      # 1. Create a public gist (any content).
-      # 2. Add repository secret  GIST_SECRET  = a PAT with `gist` scope.
-      # 3. Add repository variable BADGE_GIST_ID = the gist ID.
-      # 4. Update the badge URLs in README.md with the gist ID.
-      # The steps below are skipped automatically when secrets are not configured.
-
       - name: Extract badge metrics
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
@@ -86,7 +79,7 @@ jobs:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: ${{ vars.BADGE_GIST_ID }}
           filename: ev_lb_test_count.json
-          label: tests
+          label: Tests
           message: ${{ env.TEST_COUNT }} passed
           color: brightgreen
 
@@ -98,6 +91,6 @@ jobs:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: ${{ vars.BADGE_GIST_ID }}
           filename: ev_lb_loc.json
-          label: lines of code
+          label: Lines of code
           message: ${{ env.LOC }}
           color: blue
