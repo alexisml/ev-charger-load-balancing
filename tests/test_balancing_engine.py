@@ -533,7 +533,7 @@ class TestRuntimeParameterChanges:
     async def test_parameter_change_silently_skipped_when_meter_state_is_unparsable(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Parameter change while meter state is non-numeric (but not unavailable) is silently skipped without crashing."""
+        """Parameter change while meter state is non-numeric (but not unavailable) is silently skipped."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
