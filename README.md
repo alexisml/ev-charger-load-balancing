@@ -6,6 +6,9 @@
 [![Spell Check](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/spell-check.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/spell-check.yml)
 [![Gitleaks](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/gitleaks.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/alexisml/ha-ev-charger-balancer/blob/main/.github/dependabot.yml)
+<!-- Dynamic badges: replace BADGE_GIST_ID below after one-time setup (see .github/workflows/tests.yml) -->
+[![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Falexisml%2FBADGE_GIST_ID%2Fraw%2Fev_lb_test_count.json)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
+[![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Falexisml%2FBADGE_GIST_ID%2Fraw%2Fev_lb_loc.json)](https://github.com/alexisml/ha-ev-charger-balancer)
 
 # EV Charger Load Balancing (HACS)
 
