@@ -15,7 +15,8 @@ Tests cover:
 - Re-enabling the switch triggers immediate recomputation
 - Normal computation resumes when meter recovers from unavailable
 - Power meter unavailable after HA is fully loaded triggers the configured fallback
-- During HA startup, fallback deferred until EVENT_HOMEASSISTANT_STARTED to avoid false positives from not-yet-loaded integrations
+- During HA startup, fallback deferred until EVENT_HOMEASSISTANT_STARTED to avoid false positives
+  from not-yet-loaded integrations
 """
 
 from homeassistant.core import HomeAssistant
@@ -974,7 +975,8 @@ class TestStartupWithUnavailableMeter:
     async def test_ignore_mode_keeps_zero_when_meter_unavailable(
         self, hass: HomeAssistant
     ) -> None:
-        """In ignore mode, a genuinely unavailable meter keeps the charger at the restored current (0 on fresh install)."""
+        """In ignore mode, a genuinely unavailable meter keeps the charger at the restored current
+        (0 on fresh install)."""
         entry = MockConfigEntry(
             domain=DOMAIN,
             data={
