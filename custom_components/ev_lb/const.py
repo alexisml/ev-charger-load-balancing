@@ -98,5 +98,4 @@ def get_device_info(entry: ConfigEntry) -> DeviceInfo:
         name="EV Charger Load Balancer",
         manufacturer="ev_lb",
         model="Virtual Load Balancer",
-        entry_type=None,
     )

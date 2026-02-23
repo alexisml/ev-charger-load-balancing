@@ -13,6 +13,7 @@ on every state transition.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
@@ -122,7 +123,7 @@ class EvLoadBalancerCoordinator:
         )
 
         # Listener removal callback
-        self._unsub_listener: callback | None = None
+        self._unsub_listener: Callable[[], None] | None = None
 
     def _init_action_scripts(self, entry: ConfigEntry) -> None:
         """Load action script entity IDs from the config entry.
@@ -396,9 +397,10 @@ class EvLoadBalancerCoordinator:
         Resolves the appropriate fallback and applies it.  The "ignore"
         mode keeps the last computed value; all other modes update the
         charger current via ``_update_and_notify``.
+
+        Callers are responsible for setting ``meter_healthy = False`` and
+        ``fallback_active = True`` before invoking this method.
         """
-        self.meter_healthy = False
-        self.fallback_active = True
         fallback = self._resolve_fallback()
         if fallback is None:
             # Ignore mode — keep last value, just update sensor state

@@ -16,9 +16,7 @@ from __future__ import annotations
 from typing import Optional
 
 VOLTAGE_DEFAULT: float = 230.0  # Volts
-MIN_CURRENT_DEFAULT: float = 6.0  # Amps (IEC 61851 minimum for AC charging)
 STEP_DEFAULT: float = 1.0  # Amps — resolution of current adjustments
-RAMP_UP_TIME_DEFAULT: float = 30.0  # Seconds — cooldown before increasing current
 
 
 def compute_available_current(
