@@ -56,6 +56,9 @@
       "current_set": {
         "name": "Corriente de carga establecida"
       },
+      "power_set": {
+        "name": "Potencia de carga establecida"
+      },
       "available_current": {
         "name": "Corriente disponible"
       },
