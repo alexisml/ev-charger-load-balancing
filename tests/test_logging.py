@@ -39,7 +39,7 @@ class TestCoordinatorDebugLogs:
             hass.states.async_set(POWER_METER, "3000")
             await hass.async_block_till_done()
 
-        assert any("Recompute" in m and "house=3000 W" in m for m in caplog.messages)
+        assert any("Recompute" in m and "service=3000 W" in m for m in caplog.messages)
 
     async def test_ramp_up_hold_logs_at_debug(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry, caplog

@@ -6,7 +6,7 @@ with plain pytest.
 
 Functions:
     compute_available_current   — max EV current given a non-EV power draw
-    compute_target_current      — full single-charger target from whole-house meter
+    compute_target_current      — full single-charger target from service meter (amps)
     clamp_current               — per-charger min/max/step clamping
     distribute_current          — water-filling distribution across N chargers
     apply_ramp_up_limit         — cooldown before allowing current increase
@@ -21,7 +21,7 @@ STEP_DEFAULT: float = 1.0  # Amps — resolution of current adjustments
 
 
 def compute_available_current(
-    house_power_w: float,
+    service_power_w: float,
     max_service_a: float,
     voltage_v: float = VOLTAGE_DEFAULT,
 ) -> float:
@@ -30,59 +30,51 @@ def compute_available_current(
     The formula converts the metered power into Amps and subtracts it from
     the service limit:
 
-        available_a = max_service_a - house_power_w / voltage_v
-
-    The coordinator calls this function with the **non-EV** household load
-    (after subtracting the EV's estimated contribution from the whole-house
-    reading), so the returned value is the maximum current the EV can safely
-    draw without exceeding the service limit.
+        available_a = max_service_a - service_power_w / voltage_v
 
     A positive value means the EV can charge at that current.  A negative
-    value means the non-EV load alone already exceeds the service limit and
-    the EV must be stopped.
+    value means the load already exceeds the service limit and the EV must
+    be stopped.
 
     Args:
-        house_power_w:  Power draw to account for in Watts.  The coordinator
-                        passes the **non-EV** portion of the whole-house meter.
-        max_service_a:  Whole-house breaker / service rating in Amps.
-        voltage_v:      Nominal supply voltage in Volts.
+        service_power_w:  Power draw to account for in Watts.
+        max_service_a:    Service breaker / fuse rating in Amps.
+        voltage_v:        Nominal supply voltage in Volts.
 
     Returns:
         Maximum current available for EV charging in Amps.  May be negative
-        when the non-EV load alone exceeds the service limit.
+        when the load exceeds the service limit.
     """
-    return max_service_a - house_power_w / voltage_v
+    return max_service_a - service_power_w / voltage_v
 
 
 def compute_target_current(
-    house_power_w: float,
+    service_current_a: float,
     current_set_a: float,
     max_service_a: float,
     max_charger_a: float,
     min_charger_a: float,
-    voltage_v: float = VOLTAGE_DEFAULT,
     step_a: float = STEP_DEFAULT,
 ) -> tuple[float, Optional[float]]:
-    """Compute the target charging current and available current from a whole-house meter.
+    """Compute the target charging current and available current from a service meter reading.
 
-    This is the single-charger balancing formula.  It isolates the non-EV
-    household load by subtracting the EV's estimated draw from the whole-house
-    meter reading, then derives the maximum current the EV can safely draw.
+    All inputs and outputs are in **Amps**.  The caller is responsible for
+    converting the meter's Watt reading to Amps before calling this function.
 
-    When *current_set_a* is 0 (EV idle or stopped), the formula reduces to
-    the simple ``max_service_a − house_power_w / voltage_v``.
+    The formula isolates the non-EV load by subtracting the last commanded
+    charger current from the total service current, then derives the maximum
+    current the EV can safely draw.  When *current_set_a* is 0 (EV idle or
+    stopped), the formula reduces to ``max_service_a − service_current_a``.
 
     Args:
-        house_power_w:   Whole-house power reading in Watts, including any
-                         active EV charging.
-        current_set_a:   The current the integration last commanded to the
-                         charger in Amps (used to estimate the EV's draw).
-        max_service_a:   Whole-house breaker / service rating in Amps.
-        max_charger_a:   Per-charger maximum current limit in Amps.
-        min_charger_a:   Per-charger minimum current below which charging
-                         should be stopped rather than set to a low value.
-        voltage_v:       Nominal supply voltage in Volts.
-        step_a:          Current resolution in Amps (default 1 A).
+        service_current_a:  Total service draw in Amps (``service_power_w / voltage_v``).
+        current_set_a:      The current the integration last commanded to the
+                            charger in Amps (used to estimate the EV's draw).
+        max_service_a:      Service breaker / fuse rating in Amps.
+        max_charger_a:      Per-charger maximum current limit in Amps.
+        min_charger_a:      Per-charger minimum current below which charging
+                            should be stopped rather than set to a low value.
+        step_a:             Current resolution in Amps (default 1 A).
 
     Returns:
         A ``(available_a, target_a)`` tuple where *available_a* is the maximum
@@ -90,9 +82,8 @@ def compute_target_current(
         *target_a* is the clamped target in Amps, or ``None`` if the available
         current is below the charger's minimum (caller should stop charging).
     """
-    ev_power_w = current_set_a * voltage_v
-    non_ev_power_w = max(0.0, house_power_w - ev_power_w)
-    available_a = compute_available_current(non_ev_power_w, max_service_a, voltage_v)
+    non_ev_a = max(0.0, service_current_a - current_set_a)
+    available_a = max_service_a - non_ev_a
     target_a = clamp_current(available_a, max_charger_a, min_charger_a, step_a)
     return available_a, target_a
 

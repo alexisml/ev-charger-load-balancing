@@ -254,23 +254,23 @@ class EvLoadBalancerCoordinator:
             return
 
         try:
-            house_power_w = float(new_state.state)
+            service_power_w = float(new_state.state)
         except (ValueError, TypeError):
             _LOGGER.warning(
                 "Could not parse power meter value: %s", new_state.state
             )
             return
 
-        if abs(house_power_w) > SAFETY_MAX_POWER_METER_W:
+        if abs(service_power_w) > SAFETY_MAX_POWER_METER_W:
             _LOGGER.warning(
                 "Power meter value %.0f W exceeds safety limit (%.0f W) "
                 "— ignoring as likely sensor error",
-                house_power_w,
+                service_power_w,
                 SAFETY_MAX_POWER_METER_W,
             )
             return
 
-        self._recompute(house_power_w)
+        self._recompute(service_power_w)
 
     # ------------------------------------------------------------------
     # On-demand recompute (triggered by number/switch changes)
@@ -303,24 +303,24 @@ class EvLoadBalancerCoordinator:
             return
 
         try:
-            house_power_w = float(state.state)
+            service_power_w = float(state.state)
         except (ValueError, TypeError):
             return
 
-        if abs(house_power_w) > SAFETY_MAX_POWER_METER_W:
+        if abs(service_power_w) > SAFETY_MAX_POWER_METER_W:
             _LOGGER.warning(
                 "Power meter value %.0f W exceeds safety limit (%.0f W) "
                 "— ignoring as likely sensor error",
-                house_power_w,
+                service_power_w,
                 SAFETY_MAX_POWER_METER_W,
             )
             return
 
         _LOGGER.debug(
             "Runtime parameter changed — recomputing with last meter value %.1f W",
-            house_power_w,
+            service_power_w,
         )
-        self._recompute(house_power_w, REASON_PARAMETER_CHANGE)
+        self._recompute(service_power_w, REASON_PARAMETER_CHANGE)
 
     # ------------------------------------------------------------------
     # Manual override via ev_lb.set_limit service
@@ -448,15 +448,15 @@ class EvLoadBalancerCoordinator:
     # Core computation
     # ------------------------------------------------------------------
 
-    def _recompute(self, house_power_w: float, reason: str = REASON_POWER_METER_UPDATE) -> None:
+    def _recompute(self, service_power_w: float, reason: str = REASON_POWER_METER_UPDATE) -> None:
         """Run the single-charger balancing algorithm and publish updates."""
+        service_current_a = service_power_w / self._voltage
         available_a, clamped = compute_target_current(
-            house_power_w,
+            service_current_a,
             self.current_set_a,
             self._max_service_current,
             self.max_charger_current,
             self.min_ev_current,
-            self._voltage,
         )
         target_a = 0.0 if clamped is None else clamped
 
@@ -475,9 +475,9 @@ class EvLoadBalancerCoordinator:
             self._last_reduction_time = now
 
         _LOGGER.debug(
-            "Recompute (%s): house=%.0f W, available=%.1f A, clamped=%.1f A, final=%.1f A",
+            "Recompute (%s): service=%.0f W, available=%.1f A, clamped=%.1f A, final=%.1f A",
             reason,
-            house_power_w,
+            service_power_w,
             available_a,
             target_a,
             final_a,
