@@ -18,6 +18,9 @@ from homeassistant.helpers.selector import EntitySelector
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_lb.const import (
+    CONF_ACTION_SET_CURRENT,
+    CONF_ACTION_START_CHARGING,
+    CONF_ACTION_STOP_CHARGING,
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
     CONF_UNAVAILABLE_BEHAVIOR,
@@ -143,3 +146,65 @@ async def test_power_meter_selector_filters_by_power_device_class(hass: HomeAssi
     )
     assert isinstance(power_meter_validator, EntitySelector)
     assert power_meter_validator.config.get("device_class") == ["power"]
+
+
+async def test_options_flow_opens_without_error(hass: HomeAssistant) -> None:
+    """Test that the Configure button opens the options form without a 500 error.
+
+    Regression test for: AttributeError when HA tries to set config_entry on
+    EvLbOptionsFlow because OptionsFlow.config_entry is a read-only property
+    in newer HA versions.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_POWER_METER_ENTITY: "sensor.house_power_w",
+            CONF_VOLTAGE: 230.0,
+            CONF_MAX_SERVICE_CURRENT: 32.0,
+            CONF_UNAVAILABLE_BEHAVIOR: UNAVAILABLE_BEHAVIOR_STOP,
+            CONF_UNAVAILABLE_FALLBACK_CURRENT: 6.0,
+        },
+        unique_id=DOMAIN,
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+
+async def test_options_flow_saves_action_scripts(hass: HomeAssistant) -> None:
+    """Test that users can set action scripts via the Configure dialog.
+
+    Saving the options form should store the selected scripts so the
+    integration can call them when controlling the charger.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_POWER_METER_ENTITY: "sensor.house_power_w",
+            CONF_VOLTAGE: 230.0,
+            CONF_MAX_SERVICE_CURRENT: 32.0,
+            CONF_UNAVAILABLE_BEHAVIOR: UNAVAILABLE_BEHAVIOR_STOP,
+            CONF_UNAVAILABLE_FALLBACK_CURRENT: 6.0,
+        },
+        unique_id=DOMAIN,
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_ACTION_SET_CURRENT: "script.ev_lb_set_current",
+            CONF_ACTION_STOP_CHARGING: "script.ev_lb_stop_charging",
+            CONF_ACTION_START_CHARGING: "script.ev_lb_start_charging",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_ACTION_SET_CURRENT] == "script.ev_lb_set_current"
+    assert result["data"][CONF_ACTION_STOP_CHARGING] == "script.ev_lb_stop_charging"
+    assert result["data"][CONF_ACTION_START_CHARGING] == "script.ev_lb_start_charging"
