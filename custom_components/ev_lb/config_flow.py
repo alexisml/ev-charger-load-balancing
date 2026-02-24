@@ -98,7 +98,7 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
         data_schema = vol.Schema(
             {
                 vol.Required(CONF_POWER_METER_ENTITY): EntitySelector(
-                    EntitySelectorConfig(domain="sensor"),
+                    EntitySelectorConfig(domain="sensor", device_class="power"),
                 ),
                 vol.Required(
                     CONF_VOLTAGE,
