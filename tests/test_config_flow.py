@@ -5,11 +5,15 @@ Tests cover:
 - Validation error when the power meter entity does not exist
 - Default values for voltage and service current
 - Single-instance protection (abort if already configured)
+- Power meter EntitySelector is restricted to power device-class sensors
 """
+
+import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.selector import EntitySelector
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -116,3 +120,26 @@ async def test_user_flow_already_configured(hass: HomeAssistant) -> None:
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_power_meter_selector_filters_by_power_device_class(hass: HomeAssistant) -> None:
+    """Test that the power meter field only accepts power device-class sensors.
+
+    Users should only be shown sensors that measure instantaneous power (in
+    Watts), preventing accidental selection of unrelated sensors such as
+    temperature or humidity.
+    """
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] is FlowResultType.FORM
+
+    schema: vol.Schema = result["data_schema"]
+    # Locate the validator for the power meter field
+    power_meter_validator = next(
+        v
+        for k, v in schema.schema.items()
+        if isinstance(k, vol.Required) and k.schema == CONF_POWER_METER_ENTITY
+    )
+    assert isinstance(power_meter_validator, EntitySelector)
+    assert power_meter_validator.config.get("device_class") == ["power"]
