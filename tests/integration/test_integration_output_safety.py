@@ -468,8 +468,8 @@ class TestChargingCurrentNeverExceedsAvailable:
 
         for non_ev_w in non_ev_powers_w:
             ev_power_w = coordinator.current_set_a * 230.0
-            house_power_w = non_ev_w + ev_power_w
-            hass.states.async_set(POWER_METER, str(house_power_w))
+            service_power_w = non_ev_w + ev_power_w
+            hass.states.async_set(POWER_METER, str(service_power_w))
             await hass.async_block_till_done()
 
             output = float(hass.states.get(current_set_id).state)

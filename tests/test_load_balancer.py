@@ -406,7 +406,7 @@ class TestPowerSensorUnavailable:
     the safe fallback.  Verify that 0 W service power leads to a sensible result.
     """
 
-    def test_zero_house_power_with_no_ev(self):
+    def test_zero_service_power_with_no_ev(self):
         """When the app falls back to 0 W (e.g., because the power sensor is unavailable),
         the full service capacity is offered to the charger."""
         available = compute_available_current(
