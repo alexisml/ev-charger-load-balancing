@@ -24,26 +24,31 @@ def compute_available_current(
     max_service_a: float,
     voltage_v: float = VOLTAGE_DEFAULT,
 ) -> float:
-    """Return the current headroom available above the current total draw.
+    """Return the current available for EV charging given the supplied power draw.
 
-    The formula converts the total metered house power (including any active
-    EV charging) into Amps and subtracts it from the service limit:
+    The formula converts the metered power into Amps and subtracts it from
+    the service limit:
 
         available_a = max_service_a - house_power_w / voltage_v
 
-    A positive value means there is headroom to increase EV charging; a
-    negative value means the service limit is already exceeded and the EV
-    current must be reduced immediately.
+    The coordinator calls this function with the **non-EV** household load
+    (after subtracting the EV's estimated contribution from the whole-house
+    reading), so the returned value is the maximum current the EV can safely
+    draw without exceeding the service limit.
+
+    A positive value means the EV can charge at that current.  A negative
+    value means the non-EV load alone already exceeds the service limit and
+    the EV must be stopped.
 
     Args:
-        house_power_w:  Current total household power draw in Watts,
-                        **including** any active EV charging.
+        house_power_w:  Power draw to account for in Watts.  The coordinator
+                        passes the **non-EV** portion of the whole-house meter.
         max_service_a:  Whole-house breaker / service rating in Amps.
         voltage_v:      Nominal supply voltage in Volts.
 
     Returns:
-        Headroom in Amps above the current total draw.  May be negative when
-        total consumption already exceeds the service limit.
+        Maximum current available for EV charging in Amps.  May be negative
+        when the non-EV load alone exceeds the service limit.
     """
     return max_service_a - house_power_w / voltage_v
 
