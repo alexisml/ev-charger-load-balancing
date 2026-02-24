@@ -6,6 +6,7 @@ resumes after a cooldown.
 
 Tests cover:
 - compute_available_current: basic, edge cases, negative available
+- compute_target_current: single-charger formula with whole-house meter
 - clamp_current: clamping to min/max, step flooring, returns None below min
 - distribute_current: single charger, multi-charger fairness, caps, shutoff,
   disabled state, power sensor unavailable, charger at zero load
@@ -17,6 +18,7 @@ The computation functions live in custom_components/ev_lb/load_balancer.py.
 from custom_components.ev_lb.load_balancer import (
     VOLTAGE_DEFAULT,
     compute_available_current,
+    compute_target_current,
     clamp_current,
     distribute_current,
     apply_ramp_up_limit,
@@ -89,6 +91,112 @@ class TestComputeAvailableCurrentBasic:
             voltage_v=120.0,
         )
         assert abs(available - (100.0 - 1200.0 / 120.0)) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# compute_target_current
+# ---------------------------------------------------------------------------
+
+
+class TestComputeTargetCurrent:
+    """Tests for compute_target_current — the single-charger balancing formula.
+
+    Verifies the invariant that the returned available_a is always ≥ the
+    returned target_a, and that the formula behaves correctly across the
+    main scenarios: idle EV, active EV with fresh meter, stale meter.
+    """
+
+    def test_ev_idle_uses_full_house_reading(self):
+        """When EV is idle (0 A), available equals service minus whole-house draw."""
+        available_a, target_a = compute_target_current(
+            house_power_w=3000.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        # non_ev = house = 3000 W; 3000 / 230 = 13.04 A → available = 32 - 13.04 = 18.96 A → target = 18 A
+        assert abs(available_a - (32.0 - 3000.0 / 230.0)) < 1e-9
+        assert target_a == 18.0
+
+    def test_ev_active_meter_includes_ev_draw(self):
+        """When meter includes EV draw, EV is held steady rather than oscillating."""
+        # EV at 18 A, non-EV = 3000 W, meter total = 3000 + 18*230 = 7140 W
+        house_w = 3000.0 + 18.0 * 230.0
+        available_a, target_a = compute_target_current(
+            house_power_w=house_w,
+            current_set_a=18.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        # non_ev = 7140 - 4140 = 3000 → available = 18.96 A → target = 18 A
+        assert abs(available_a - (32.0 - 3000.0 / 230.0)) < 1e-9
+        assert target_a == 18.0
+
+    def test_target_never_exceeds_available(self):
+        """Target current is always ≤ available current."""
+        # 690 W non-EV, EV at 0 → available ≈ 29 A
+        available_a, target_a = compute_target_current(
+            house_power_w=690.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert target_a is None or target_a <= available_a
+
+    def test_stale_meter_does_not_exceed_service_limit(self):
+        """When the meter lags (reads lower than actual EV draw), target is clamped to service max."""
+        # current_set_a=32 but meter only shows 690 W (EV not yet reflected)
+        # Without non-EV isolation: raw_target = 32 + (32 - 690/230) = 32 + 29 = 61 → UNSAFE
+        # With non-EV isolation: non_ev = max(0, 690 - 32*230) = 0 → available = 32 A → target = 32 A
+        available_a, target_a = compute_target_current(
+            house_power_w=690.0,
+            current_set_a=32.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert target_a is None or target_a <= 32.0
+        assert available_a <= 32.0
+
+    def test_overload_stops_ev(self):
+        """When non-EV load alone exceeds the service limit, charging stops."""
+        # 9000 W non-EV → available = 32 - 39.1 = -7.1 A → stop
+        available_a, target_a = compute_target_current(
+            house_power_w=9000.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert available_a < 0
+        assert target_a is None
+
+    def test_target_capped_at_charger_max(self):
+        """Target is capped at charger maximum even when available is higher."""
+        available_a, target_a = compute_target_current(
+            house_power_w=0.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=16.0,
+            min_charger_a=6.0,
+        )
+        assert target_a == 16.0
+        assert available_a == 32.0
+
+    def test_below_min_returns_none_target(self):
+        """When available is below charger minimum, target is None (stop charging)."""
+        # 6500 W → available = 32 - 28.26 = 3.74 A < 6 A min → None
+        available_a, target_a = compute_target_current(
+            house_power_w=6500.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert target_a is None
 
 
 # ---------------------------------------------------------------------------

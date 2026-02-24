@@ -5,7 +5,8 @@ runtime.  It has no dependency on Home Assistant — it can be tested
 with plain pytest.
 
 Functions:
-    compute_available_current   — headroom above current total draw
+    compute_available_current   — max EV current given a non-EV power draw
+    compute_target_current      — full single-charger target from whole-house meter
     clamp_current               — per-charger min/max/step clamping
     distribute_current          — water-filling distribution across N chargers
     apply_ramp_up_limit         — cooldown before allowing current increase
@@ -51,6 +52,49 @@ def compute_available_current(
         when the non-EV load alone exceeds the service limit.
     """
     return max_service_a - house_power_w / voltage_v
+
+
+def compute_target_current(
+    house_power_w: float,
+    current_set_a: float,
+    max_service_a: float,
+    max_charger_a: float,
+    min_charger_a: float,
+    voltage_v: float = VOLTAGE_DEFAULT,
+    step_a: float = STEP_DEFAULT,
+) -> tuple[float, Optional[float]]:
+    """Compute the target charging current and available current from a whole-house meter.
+
+    This is the single-charger balancing formula.  It isolates the non-EV
+    household load by subtracting the EV's estimated draw from the whole-house
+    meter reading, then derives the maximum current the EV can safely draw.
+
+    When *current_set_a* is 0 (EV idle or stopped), the formula reduces to
+    the simple ``max_service_a − house_power_w / voltage_v``.
+
+    Args:
+        house_power_w:   Whole-house power reading in Watts, including any
+                         active EV charging.
+        current_set_a:   The current the integration last commanded to the
+                         charger in Amps (used to estimate the EV's draw).
+        max_service_a:   Whole-house breaker / service rating in Amps.
+        max_charger_a:   Per-charger maximum current limit in Amps.
+        min_charger_a:   Per-charger minimum current below which charging
+                         should be stopped rather than set to a low value.
+        voltage_v:       Nominal supply voltage in Volts.
+        step_a:          Current resolution in Amps (default 1 A).
+
+    Returns:
+        A ``(available_a, target_a)`` tuple where *available_a* is the maximum
+        current the EV can safely draw (before charger-limit clamping) and
+        *target_a* is the clamped target in Amps, or ``None`` if the available
+        current is below the charger's minimum (caller should stop charging).
+    """
+    ev_power_w = current_set_a * voltage_v
+    non_ev_power_w = max(0.0, house_power_w - ev_power_w)
+    available_a = compute_available_current(non_ev_power_w, max_service_a, voltage_v)
+    target_a = clamp_current(available_a, max_charger_a, min_charger_a, step_a)
+    return available_a, target_a
 
 
 def clamp_current(

@@ -63,7 +63,7 @@ from .const import (
     UNAVAILABLE_BEHAVIOR_IGNORE,
     UNAVAILABLE_BEHAVIOR_SET_CURRENT,
 )
-from .load_balancer import apply_ramp_up_limit, clamp_current, compute_available_current
+from .load_balancer import apply_ramp_up_limit, clamp_current, compute_target_current
 from ._log import get_logger
 
 _LOGGER = get_logger(__name__)
@@ -450,26 +450,13 @@ class EvLoadBalancerCoordinator:
 
     def _recompute(self, house_power_w: float, reason: str = REASON_POWER_METER_UPDATE) -> None:
         """Run the single-charger balancing algorithm and publish updates."""
-        # Isolate the non-EV household load by removing the EV's estimated draw.
-        # When house_power_w is a whole-house meter (as required by this integration),
-        # this correctly yields the non-EV load.  If the meter is temporarily stale
-        # the subtraction may produce a negative value; clamping to 0 prevents a
-        # spurious overcount that would set the EV above the safe maximum.
-        ev_power_w = self.current_set_a * self._voltage
-        non_ev_power_w = max(0.0, house_power_w - ev_power_w)
-
-        # available_a = maximum current the EV can safely draw given the non-EV load
-        available_a = compute_available_current(
-            non_ev_power_w,
+        available_a, clamped = compute_target_current(
+            house_power_w,
+            self.current_set_a,
             self._max_service_current,
-            self._voltage,
-        )
-
-        # Clamp to charger limits
-        clamped = clamp_current(
-            available_a,
             self.max_charger_current,
             self.min_ev_current,
+            self._voltage,
         )
         target_a = 0.0 if clamped is None else clamped
 
@@ -488,12 +475,9 @@ class EvLoadBalancerCoordinator:
             self._last_reduction_time = now
 
         _LOGGER.debug(
-            "Recompute (%s): house=%.0f W, ev_est=%.0f W, non_ev=%.0f W, "
-            "available=%.1f A, clamped=%.1f A, final=%.1f A",
+            "Recompute (%s): house=%.0f W, available=%.1f A, clamped=%.1f A, final=%.1f A",
             reason,
             house_power_w,
-            ev_power_w,
-            non_ev_power_w,
             available_a,
             target_a,
             final_a,
