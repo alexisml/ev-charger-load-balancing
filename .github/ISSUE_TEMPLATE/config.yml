@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/alexisml/ha-ev-charger-balancer/security/advisories/new
+    about: Report a security vulnerability privately using GitHub's vulnerability reporting.
+  - name: Documentation
+    url: https://github.com/alexisml/ha-ev-charger-balancer/blob/main/docs/documentation/troubleshooting-and-debugging.md
+    about: Check the Troubleshooting & Debugging guide before opening an issue.
