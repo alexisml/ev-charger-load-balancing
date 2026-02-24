@@ -59,7 +59,7 @@ class TestDeviceRegistration:
         entries = er.async_entries_for_config_entry(
             ent_reg, mock_config_entry.entry_id
         )
-        assert len(entries) == 12  # 5 sensors + 3 binary_sensors + 3 numbers + 1 switch
+        assert len(entries) == 13  # 6 sensors + 3 binary_sensors + 3 numbers + 1 switch
 
         dev_reg = dr.async_get(hass)
         device = dev_reg.async_get_device(
@@ -89,6 +89,7 @@ class TestUniqueIds:
         )
         expected_suffixes = {
             "current_set",
+            "power_set",
             "available_current",
             "last_action_reason",
             "balancer_state",
@@ -126,6 +127,21 @@ class TestSensorEntities:
         ent_reg = er.async_get(hass)
         entry = ent_reg.async_get_entity_id(
             "sensor", DOMAIN, f"{mock_config_entry.entry_id}_current_set"
+        )
+        assert entry is not None
+        state = hass.states.get(entry)
+        assert state is not None
+        assert float(state.state) == 0.0
+
+    async def test_power_set_sensor_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Power-set sensor starts at 0 W when no charging has been commanded."""
+        await setup_integration(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entry = ent_reg.async_get_entity_id(
+            "sensor", DOMAIN, f"{mock_config_entry.entry_id}_power_set"
         )
         assert entry is not None
         state = hass.states.get(entry)
@@ -441,7 +457,7 @@ class TestUnload:
         entries_before = er.async_entries_for_config_entry(
             ent_reg, mock_config_entry.entry_id
         )
-        assert len(entries_before) == 12
+        assert len(entries_before) == 13
 
         await hass.config_entries.async_unload(mock_config_entry.entry_id)
         await hass.async_block_till_done()

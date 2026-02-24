@@ -56,6 +56,9 @@
       "current_set": {
         "name": "Charging current set"
       },
+      "power_set": {
+        "name": "Charging power set"
+      },
       "available_current": {
         "name": "Available current"
       },

@@ -125,6 +125,11 @@ class EvLoadBalancerCoordinator:
         # Listener removal callback
         self._unsub_listener: Callable[[], None] | None = None
 
+    @property
+    def current_set_w(self) -> float:
+        """Return the last requested charging power in Watts."""
+        return round(self.current_set_a * self._voltage, 1)
+
     def _init_action_scripts(self, entry: ConfigEntry) -> None:
         """Load action script entity IDs from the config entry.
 
