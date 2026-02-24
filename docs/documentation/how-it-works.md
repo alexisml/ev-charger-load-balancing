@@ -114,7 +114,7 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 | Entity | Type | What it tells you |
 |---|---|---|
 | `sensor.*_charging_current_set` | Measurement (A) | The charging current the integration last sent to the charger. Shows `0` when charging is stopped. This is what your charger *should* be doing. |
-| `sensor.*_available_current` | Measurement (A) | How much headroom your electrical service has for EV charging right now. Positive = room to charge. Negative = overloaded. |
+| `sensor.*_available_current` | Measurement (A) | The maximum current the EV can safely draw right now given the non-EV household load. The charging current set is always ≤ this value. |
 | `sensor.*_last_action_reason` | Diagnostic | Why the last recomputation happened. Values: `power_meter_update` (normal), `manual_override`, `fallback_unavailable`, `parameter_change`. |
 | `sensor.*_balancer_state` | Diagnostic | The integration's operational state right now — see [Balancer states](#balancer-states) below. |
 | `sensor.*_configured_fallback` | Diagnostic | What the integration is configured to do when the meter goes unavailable: `stop`, `ignore`, or `set_current`. |
@@ -155,10 +155,10 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 
 Every time your power meter reports a new value:
 
-1. **Calculate headroom:** How much current can you still use before hitting your main breaker limit?
-   - Formula: `available_amps = max_service_current - (house_power_watts / voltage)`
-2. **Calculate target:** What should the charger be set to?
-   - Target = current charger setting + available headroom (capped at charger maximum)
+1. **Calculate non-EV load:** Subtract the EV's estimated draw from the whole-house meter reading to isolate how much the rest of your home is consuming.
+   - `non_ev_w = max(0, house_power_w − current_ev_a × voltage)`
+2. **Calculate target:** What is the maximum current the EV can safely draw?
+   - `available_a = max_service_a − non_ev_w / voltage` (capped at charger maximum)
 3. **Apply safety rules:**
    - If target is below the minimum EV current → stop charging (instant)
    - If target is lower than current setting → reduce immediately (instant, no delay)
@@ -183,9 +183,10 @@ On each trigger:
 
 ```
 house_power_w = read power meter sensor
-available_a   = service_current_a − house_power_w / voltage_v
-raw_target_a  = current_ev_a + available_a
-target_a      = min(raw_target_a, max_charger_a), floored to 1 A steps
+ev_power_w    = current_ev_a × voltage_v          # EV's estimated draw
+non_ev_w      = max(0, house_power_w − ev_power_w) # non-EV household load
+available_a   = service_current_a − non_ev_w / voltage_v
+target_a      = min(available_a, max_charger_a), floored to 1 A steps
 ```
 
 Then the safety rules apply:
@@ -193,8 +194,8 @@ Then the safety rules apply:
 ```mermaid
 flowchart TD
     A([Trigger event])
-    A --> B["Compute available headroom<br/>available_a = service_current_a − house_power_w / voltage_v"]
-    B --> C["target_a = min(current_ev_a + available_a, max_charger_a)<br/>floor to 1 A step"]
+    A --> B["Isolate non-EV load<br/>non_ev_w = max(0, house_w − ev_a × V)"]
+    B --> C["available_a = service_a − non_ev_w / V<br/>target_a = min(available_a, max_charger_a), floor to 1 A step"]
     C --> D{"target_a < min_ev_a?"}
     D -- YES --> E(["stop_charging — instant"])
     D -- NO --> F{"target_a < current_a?<br/>load increased, must reduce"}

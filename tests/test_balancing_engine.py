@@ -96,10 +96,10 @@ class TestBasicTargetComputation:
     async def test_available_current_sensor_updates(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Available current sensor reflects the computed headroom."""
+        """Available current sensor shows the maximum current the EV can safely draw."""
         await setup_integration(hass, mock_config_entry)
 
-        # 3000 W at 230 V → 13.04 A → headroom = 32 - 13.04 = 18.96
+        # 3000 W at 230 V (no EV yet, so non_ev = house = 3000 W) → available = 32 - 13.04 = 18.96 A
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
 
@@ -183,7 +183,7 @@ class TestInstantReduction:
         await setup_integration(hass, mock_config_entry)
 
         # Step 1: moderate load → charger gets some current
-        # 3000 W at 230 V → available = 18.96, target = 0 + 18.96 → 18 A
+        # 3000 W at 230 V (no EV yet): non_ev = 3000 W → available = 32 - 13.04 = 18.96 → 18 A
         hass.states.async_set(POWER_METER, "3000")
         await hass.async_block_till_done()
 
@@ -193,8 +193,8 @@ class TestInstantReduction:
         first_value = float(hass.states.get(current_set_id).state)
         assert first_value == 18.0
 
-        # Step 2: heavy load exceeding service limit → negative headroom → drops
-        # 8000 W at 230 V → available = -2.78, target = 18 + (-2.78) = 15.22 → 15 A
+        # Step 2: heavy load (meter includes EV at 18 A = 4140 W) → must reduce
+        # 8000 W total: non_ev = 8000 - 18*230 = 3860 W → available = 32 - 16.78 = 15.22 → 15 A
         hass.states.async_set(POWER_METER, "8000")
         await hass.async_block_till_done()
 

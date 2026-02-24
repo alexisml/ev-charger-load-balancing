@@ -380,8 +380,103 @@ class TestOutputNeverExceedsServiceLimit:
 
 
 # ---------------------------------------------------------------------------
-# Power meter safety — reject insane sensor readings
+# Charging current never exceeds available current
 # ---------------------------------------------------------------------------
+
+
+class TestChargingCurrentNeverExceedsAvailable:
+    """Verify that the charging current set is always ≤ the available current sensor.
+
+    This is the key invariant reported in the bug where users saw the charger
+    set to 32 A while the available current sensor showed only 29 A.
+    """
+
+    async def test_output_never_exceeds_available_on_first_reading(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Charging current never exceeds available current on the first power meter reading."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        coordinator.ramp_up_time_s = 0.0
+
+        current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
+        available_id = get_entity_id(hass, mock_config_entry, "sensor", "available_current")
+
+        hass.states.async_set(POWER_METER, "690")
+        await hass.async_block_till_done()
+
+        output = float(hass.states.get(current_set_id).state)
+        available = float(hass.states.get(available_id).state)
+
+        assert output <= available, f"Charging current {output} A exceeds available {available} A"
+
+    async def test_output_never_exceeds_available_after_ev_starts_charging(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Charging current never exceeds available current after the EV starts charging.
+
+        Simulates the reported bug: meter shows 690 W (3 A non-EV load) → available = 29 A.
+        After EV starts at some current, a new meter event fires.  The charger current
+        must still not exceed available.
+        """
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        coordinator.ramp_up_time_s = 0.0
+
+        current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
+        available_id = get_entity_id(hass, mock_config_entry, "sensor", "available_current")
+
+        # Step 1: 690 W non-EV load; EV is at 0 A.
+        # available = 32 - 3 = 29 A → EV set to 29 A.
+        hass.states.async_set(POWER_METER, "690")
+        await hass.async_block_till_done()
+
+        output_step1 = float(hass.states.get(current_set_id).state)
+        available_step1 = float(hass.states.get(available_id).state)
+        assert output_step1 <= available_step1, (
+            f"Step 1: output {output_step1} A exceeds available {available_step1} A"
+        )
+
+        # Step 2: meter fires again with the same non-EV load (e.g. meter includes
+        # EV and reflects the new EV draw: 690 + 29*230 = 7360 W).
+        # With correct algorithm: non_ev = 7360 - 29*230 = 690 W → available = 29 A → stays at 29 A.
+        ev_current = coordinator.current_set_a
+        meter_with_ev = 690.0 + ev_current * 230.0
+        hass.states.async_set(POWER_METER, str(meter_with_ev))
+        await hass.async_block_till_done()
+
+        output_step2 = float(hass.states.get(current_set_id).state)
+        available_step2 = float(hass.states.get(available_id).state)
+        assert output_step2 <= available_step2, (
+            f"Step 2: output {output_step2} A exceeds available {available_step2} A"
+        )
+
+    async def test_output_never_exceeds_available_across_multiple_readings(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Charging current ≤ available current holds across a sequence of power meter events."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        coordinator.ramp_up_time_s = 0.0
+
+        current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
+        available_id = get_entity_id(hass, mock_config_entry, "sensor", "available_current")
+
+        # Simulate a series of whole-house meter readings (meter includes EV).
+        # Non-EV load fluctuates; EV adapts each cycle.
+        non_ev_powers_w = [690.0, 1150.0, 460.0, 4600.0, 230.0]
+
+        for non_ev_w in non_ev_powers_w:
+            ev_power_w = coordinator.current_set_a * 230.0
+            service_power_w = non_ev_w + ev_power_w
+            hass.states.async_set(POWER_METER, str(service_power_w))
+            await hass.async_block_till_done()
+
+            output = float(hass.states.get(current_set_id).state)
+            available = float(hass.states.get(available_id).state)
+            assert output <= available, (
+                f"non_ev={non_ev_w} W: output {output} A exceeds available {available} A"
+            )
 
 
 class TestPowerMeterSafetyGuardrails:

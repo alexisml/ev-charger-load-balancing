@@ -6,6 +6,7 @@ resumes after a cooldown.
 
 Tests cover:
 - compute_available_current: basic, edge cases, negative available
+- compute_target_current: single-charger formula with service meter (amps)
 - clamp_current: clamping to min/max, step flooring, returns None below min
 - distribute_current: single charger, multi-charger fairness, caps, shutoff,
   disabled state, power sensor unavailable, charger at zero load
@@ -17,6 +18,7 @@ The computation functions live in custom_components/ev_lb/load_balancer.py.
 from custom_components.ev_lb.load_balancer import (
     VOLTAGE_DEFAULT,
     compute_available_current,
+    compute_target_current,
     clamp_current,
     distribute_current,
     apply_ramp_up_limit,
@@ -31,20 +33,20 @@ from custom_components.ev_lb.load_balancer import (
 class TestComputeAvailableCurrentBasic:
     """Basic scenarios for compute_available_current: verify the formula produces correct headroom values."""
     def test_no_ev_load(self):
-        """With no EV charging, available = service_limit - house_load."""
+        """With no EV charging, available = service_limit - service_load."""
         # 5 kW total @ 230 V → ~21.7 A; limit 32 A → ~10.3 A headroom
         available = compute_available_current(
-            house_power_w=5000.0,
+            service_power_w=5000.0,
             max_service_a=32.0,
             voltage_v=230.0,
         )
         assert abs(available - (32.0 - 5000.0 / 230.0)) < 1e-9
 
     def test_house_power_includes_ev_draw(self):
-        """House power includes EV draw; formula uses total consumption directly."""
-        # House total 7 kW (including EV): available = 32 - 7000/230 ≈ 1.57 A headroom
+        """Service power includes EV draw; formula uses total consumption directly."""
+        # Service total 7 kW (including EV): available = 32 - 7000/230 ≈ 1.57 A headroom
         available = compute_available_current(
-            house_power_w=7000.0,
+            service_power_w=7000.0,
             max_service_a=32.0,
             voltage_v=230.0,
         )
@@ -53,7 +55,7 @@ class TestComputeAvailableCurrentBasic:
     def test_available_matches_full_capacity(self):
         """When total draw is zero, all capacity is available."""
         available = compute_available_current(
-            house_power_w=0.0,
+            service_power_w=0.0,
             max_service_a=32.0,
         )
         assert abs(available - 32.0) < 1e-9
@@ -62,7 +64,7 @@ class TestComputeAvailableCurrentBasic:
         """Returns negative when total draw already exceeds service limit."""
         # 9 kW @ 230 V ≈ 39.1 A > 32 A limit → negative headroom
         available = compute_available_current(
-            house_power_w=9000.0,
+            service_power_w=9000.0,
             max_service_a=32.0,
             voltage_v=230.0,
         )
@@ -71,11 +73,11 @@ class TestComputeAvailableCurrentBasic:
     def test_uses_default_voltage(self):
         """Default voltage of 230 V is used when not specified."""
         available_default = compute_available_current(
-            house_power_w=2300.0,
+            service_power_w=2300.0,
             max_service_a=32.0,
         )
         available_explicit = compute_available_current(
-            house_power_w=2300.0,
+            service_power_w=2300.0,
             max_service_a=32.0,
             voltage_v=VOLTAGE_DEFAULT,
         )
@@ -84,11 +86,117 @@ class TestComputeAvailableCurrentBasic:
     def test_different_voltage(self):
         """Calculation scales correctly for 120 V systems."""
         available = compute_available_current(
-            house_power_w=1200.0,
+            service_power_w=1200.0,
             max_service_a=100.0,
             voltage_v=120.0,
         )
         assert abs(available - (100.0 - 1200.0 / 120.0)) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# compute_target_current
+# ---------------------------------------------------------------------------
+
+
+class TestComputeTargetCurrent:
+    """Tests for compute_target_current — the single-charger balancing formula.
+
+    Verifies the invariant that the returned available_a is always ≥ the
+    returned target_a, and that the formula behaves correctly across the
+    main scenarios: idle EV, active EV with fresh meter, stale meter.
+    """
+
+    def test_ev_idle_uses_full_service_reading(self):
+        """When EV is idle (0 A), available equals service limit minus total draw."""
+        # 3000 W / 230 V = 13.04 A total service draw
+        available_a, target_a = compute_target_current(
+            service_current_a=3000.0 / 230.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        # non_ev = 13.04 - 0 = 13.04 A → available = 32 - 13.04 = 18.96 A → target = 18 A
+        assert abs(available_a - (32.0 - 3000.0 / 230.0)) < 1e-9
+        assert target_a == 18.0
+
+    def test_ev_active_meter_includes_ev_draw(self):
+        """When meter includes EV draw, EV is held steady rather than oscillating."""
+        # EV at 18 A, non-EV = 3000 W = 13.04 A; meter total = 13.04 + 18 = 31.04 A
+        service_current_a = (3000.0 + 18.0 * 230.0) / 230.0
+        available_a, target_a = compute_target_current(
+            service_current_a=service_current_a,
+            current_set_a=18.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        # non_ev = 31.04 - 18 = 13.04 A → available = 32 - 13.04 = 18.96 A → target = 18 A
+        assert abs(available_a - (32.0 - 3000.0 / 230.0)) < 1e-9
+        assert target_a == 18.0
+
+    def test_target_never_exceeds_available(self):
+        """Target current is always ≤ available current."""
+        # 690 W / 230 V = 3 A non-EV draw, EV at 0 → available = 32 - 3 = 29 A
+        available_a, target_a = compute_target_current(
+            service_current_a=690.0 / 230.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert target_a is None or target_a <= available_a
+
+    def test_stale_meter_does_not_exceed_service_limit(self):
+        """When the meter lags (reads lower than actual EV draw), target is clamped to service max."""
+        # service_current_a = 690/230 ≈ 3 A, current_set_a = 32 A
+        # non_ev_a = max(0, 3 - 32) = 0 A → available = 32 A → target = 32 A
+        available_a, target_a = compute_target_current(
+            service_current_a=690.0 / 230.0,
+            current_set_a=32.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert target_a is None or target_a <= 32.0
+        assert available_a <= 32.0
+
+    def test_overload_stops_ev(self):
+        """When service draw alone exceeds the service limit, charging stops."""
+        # 9000 W / 230 V = 39.13 A → available = 32 - 39.13 = -7.13 A → stop
+        available_a, target_a = compute_target_current(
+            service_current_a=9000.0 / 230.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert available_a < 0
+        assert target_a is None
+
+    def test_target_capped_at_charger_max(self):
+        """Target is capped at charger maximum even when available is higher."""
+        available_a, target_a = compute_target_current(
+            service_current_a=0.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=16.0,
+            min_charger_a=6.0,
+        )
+        assert target_a == 16.0
+        assert available_a == 32.0
+
+    def test_below_min_returns_none_target(self):
+        """When available is below charger minimum, target is None (stop charging)."""
+        # 6500 W / 230 V = 28.26 A → available = 32 - 28.26 = 3.74 A < 6 A min → None
+        available_a, target_a = compute_target_current(
+            service_current_a=6500.0 / 230.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert target_a is None
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +388,7 @@ class TestDisabledState:
     def test_compute_still_works_when_lb_disabled(self):
         """The computation layer is stateless; disabling load balancing is enforced by the caller, not here."""
         available = compute_available_current(
-            house_power_w=3000.0,
+            service_power_w=3000.0,
             max_service_a=32.0,
         )
         # 3000 W / 230 V ≈ 13.04 A; available ≈ 32 - 13.04 = 18.96 A → floored to 18 A
@@ -295,14 +403,14 @@ class TestDisabledState:
 
 class TestPowerSensorUnavailable:
     """The app layer handles unavailable state; computation receives 0.0 as
-    the safe fallback.  Verify that 0 W house power leads to a sensible result.
+    the safe fallback.  Verify that 0 W service power leads to a sensible result.
     """
 
-    def test_zero_house_power_with_no_ev(self):
+    def test_zero_service_power_with_no_ev(self):
         """When the app falls back to 0 W (e.g., because the power sensor is unavailable),
         the full service capacity is offered to the charger."""
         available = compute_available_current(
-            house_power_w=0.0,
+            service_power_w=0.0,
             max_service_a=32.0,
         )
         result = clamp_current(available, max_charger_a=32.0, min_charger_a=6.0)
@@ -413,29 +521,29 @@ class TestComputeAvailableCurrentBoundaries:
 
     def test_zero_service_limit_gives_negative_with_any_load(self):
         """A zero service limit always returns negative available current when there is load."""
-        result = compute_available_current(house_power_w=100.0, max_service_a=0.0)
+        result = compute_available_current(service_power_w=100.0, max_service_a=0.0)
         assert result < 0
 
     def test_zero_service_limit_zero_load_gives_zero(self):
         """Zero service limit and zero load gives exactly zero available."""
-        result = compute_available_current(house_power_w=0.0, max_service_a=0.0)
+        result = compute_available_current(service_power_w=0.0, max_service_a=0.0)
         assert result == 0.0
 
     def test_very_large_power_gives_large_negative(self):
-        """Extremely large house power produces a large negative available current."""
-        result = compute_available_current(house_power_w=200_000.0, max_service_a=32.0)
+        """Extremely large service power produces a large negative available current."""
+        result = compute_available_current(service_power_w=200_000.0, max_service_a=32.0)
         assert result < -800.0
 
     def test_negative_power_export_increases_available_current(self):
         """Negative power (solar export) increases available current beyond service limit."""
-        result = compute_available_current(house_power_w=-5000.0, max_service_a=32.0)
+        result = compute_available_current(service_power_w=-5000.0, max_service_a=32.0)
         # -(-5000)/230 = +21.7 A → available = 32 + 21.7 ≈ 53.7 A
         assert result > 32.0
 
     def test_power_exactly_at_service_limit_gives_zero(self):
-        """House power exactly matching service capacity leaves zero headroom."""
+        """Service power exactly matching service capacity leaves zero headroom."""
         # 32 A × 230 V = 7360 W
-        result = compute_available_current(house_power_w=7360.0, max_service_a=32.0)
+        result = compute_available_current(service_power_w=7360.0, max_service_a=32.0)
         assert abs(result) < 1e-9
 
 
