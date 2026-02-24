@@ -58,7 +58,7 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
         config_entry: ConfigEntry,
     ) -> EvLbOptionsFlow:
         """Return the options flow handler."""
-        return EvLbOptionsFlow(config_entry)
+        return EvLbOptionsFlow()
 
     async def async_step_user(
         self,
@@ -184,10 +184,6 @@ class EvLbOptionsFlow(OptionsFlow):
     Allows users to add, change, or remove action scripts after initial
     setup without needing to delete and re-create the config entry.
     """
-
-    def __init__(self, config_entry) -> None:
-        """Initialise the options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(
         self,
