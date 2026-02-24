@@ -1,0 +1,90 @@
+name: Bug Report
+description: Report a problem with the EV Charger Load Balancing integration
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug. Please fill in the details below so we can reproduce and fix the issue.
+
+        > ⚠️ **Do not include sensitive information** (API keys, passwords, personal data) in this report. GitHub issues are public.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you submit
+      options:
+        - label: I have searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I have checked the [Troubleshooting & Debugging guide](../../blob/main/docs/documentation/troubleshooting-and-debugging.md).
+          required: true
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: Integration version
+      description: Found in Settings → Devices & Services → EV Charger Load Balancing → ⋮ → Integration details.
+      placeholder: e.g. 1.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      description: Found in Settings → System → About.
+      placeholder: e.g. 2025.2.5
+    validations:
+      required: true
+
+  - type: input
+    id: ha_platform
+    attributes:
+      label: Home Assistant installation type
+      description: e.g. Home Assistant OS, Container, Supervised, Core.
+      placeholder: e.g. Home Assistant OS on Raspberry Pi 4
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: Describe what happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: Describe what you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Enable debug logging for the integration and paste relevant lines here.
+        See the [Logging Guide](../../blob/main/docs/documentation/logging-guide.md) for instructions.
+      render: text
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any other information that may be relevant (charger model, action scripts used, etc.).
