@@ -7,6 +7,7 @@ Tests cover:
 - ev_lb.set_limit triggers the appropriate action scripts (set_current, stop, resume)
 - ev_lb.set_limit override is one-shot — the next power meter event resumes automatic balancing
 - ev_lb.set_limit with entry_id targets only that instance; other instances are unaffected
+- ev_lb.set_limit with an unknown entry_id is a silent no-op — no instance is affected
 - ev_lb.set_limit without entry_id broadcasts to all instances
 - last_action_reason sensor reflects the correct reason for each type of update
 - ev_lb.set_limit service is unregistered when all entries are unloaded
@@ -508,3 +509,31 @@ class TestSetLimitMultiInstance:
 
         assert float(hass.states.get(current_a_id).state) == 10.0
         assert float(hass.states.get(current_b_id).state) == 10.0
+
+    async def test_set_limit_with_unknown_entry_id_is_a_no_op(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_no_actions: MockConfigEntry,
+    ) -> None:
+        """Calling set_limit with a non-existent entry_id leaves all instances untouched.
+
+        If the user provides an entry_id that does not match any loaded instance
+        (e.g. a stale automation referencing a deleted entry), the service
+        silently ignores the call so no other instance is accidentally affected.
+        """
+        await setup_integration(hass, mock_config_entry_no_actions)
+
+        current_id = get_entity_id(
+            hass, mock_config_entry_no_actions, "sensor", "current_set"
+        )
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SET_LIMIT,
+            {"current_a": 20.0, "entry_id": "nonexistent_entry_id"},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        # No coordinator should have been touched
+        assert float(hass.states.get(current_id).state) == 0.0
