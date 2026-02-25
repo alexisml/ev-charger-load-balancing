@@ -136,7 +136,10 @@ class TestResolveFallbackCurrent:
         assert result == 10.0
 
     def test_set_current_mode_capped_at_charger_max(self):
-        """Fallback current is capped at the charger maximum — a misconfigured fallback cannot exceed hardware limits."""
+        """Fallback current is capped at the charger maximum.
+
+        A misconfigured fallback cannot exceed hardware limits.
+        """
         result = resolve_fallback_current("set_current", fallback_a=40.0, max_charger_a=32.0)
         assert result == 32.0
 

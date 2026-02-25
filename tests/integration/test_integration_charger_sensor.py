@@ -26,7 +26,6 @@ from conftest import (
     POWER_METER,
     meter_w,
     meter_for_available,
-    setup_integration,
     get_entity_id,
 )
 

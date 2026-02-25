@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ev_lb.const import DOMAIN
-from conftest import POWER_METER, setup_integration, get_entity_id
+from conftest import POWER_METER, setup_integration
 
 
 class TestOverloadCorrectionLoop:

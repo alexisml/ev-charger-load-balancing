@@ -509,7 +509,6 @@ class TestStartupWithUnavailableMeter:
     ) -> None:
         """Meter status is healthy when a valid reading is present at load time."""
         # setup_integration pre-sets the meter to "0" before setup
-        from conftest import setup_integration
         await setup_integration(hass, mock_config_entry)
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
