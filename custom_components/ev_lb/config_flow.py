@@ -48,6 +48,53 @@ from ._log import get_logger
 
 _LOGGER = get_logger(__name__)
 
+# ---------------------------------------------------------------------------
+# Shared selector widgets — defined once and reused in both the initial config
+# flow and the options flow to avoid duplication.
+# ---------------------------------------------------------------------------
+
+_VOLTAGE_SELECTOR = NumberSelector(
+    NumberSelectorConfig(
+        min=MIN_VOLTAGE,
+        max=MAX_VOLTAGE,
+        step=1.0,
+        unit_of_measurement="V",
+        mode=NumberSelectorMode.BOX,
+    ),
+)
+
+_SERVICE_CURRENT_SELECTOR = NumberSelector(
+    NumberSelectorConfig(
+        min=MIN_SERVICE_CURRENT,
+        max=MAX_SERVICE_CURRENT,
+        step=1.0,
+        unit_of_measurement="A",
+        mode=NumberSelectorMode.BOX,
+    ),
+)
+
+_UNAVAILABLE_BEHAVIOR_SELECTOR = SelectSelector(
+    SelectSelectorConfig(
+        options=[
+            SelectOptionDict(value=UNAVAILABLE_BEHAVIOR_STOP, label="Stop charging (0 A)"),
+            SelectOptionDict(value=UNAVAILABLE_BEHAVIOR_IGNORE, label="Ignore (keep last value)"),
+            SelectOptionDict(value=UNAVAILABLE_BEHAVIOR_SET_CURRENT, label="Set a specific current"),
+        ],
+        mode=SelectSelectorMode.DROPDOWN,
+        translation_key="unavailable_behavior",
+    ),
+)
+
+_FALLBACK_CURRENT_SELECTOR = NumberSelector(
+    NumberSelectorConfig(
+        min=0.0,
+        max=MAX_CHARGER_CURRENT,
+        step=1.0,
+        unit_of_measurement="A",
+        mode=NumberSelectorMode.BOX,
+    ),
+)
+
 
 class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGeneralTypeIssues,reportCallIssue]  # both needed: HA ConfigFlow domain= keyword is unknown without HA type stubs
     """Handle a config flow for EV Charger Load Balancing."""
@@ -104,62 +151,19 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
                 vol.Required(
                     CONF_VOLTAGE,
                     default=DEFAULT_VOLTAGE,
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=MIN_VOLTAGE,
-                        max=MAX_VOLTAGE,
-                        step=1.0,
-                        unit_of_measurement="V",
-                        mode=NumberSelectorMode.BOX,
-                    ),
-                ),
+                ): _VOLTAGE_SELECTOR,
                 vol.Required(
                     CONF_MAX_SERVICE_CURRENT,
                     default=DEFAULT_MAX_SERVICE_CURRENT,
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=MIN_SERVICE_CURRENT,
-                        max=MAX_SERVICE_CURRENT,
-                        step=1.0,
-                        unit_of_measurement="A",
-                        mode=NumberSelectorMode.BOX,
-                    ),
-                ),
+                ): _SERVICE_CURRENT_SELECTOR,
                 vol.Required(
                     CONF_UNAVAILABLE_BEHAVIOR,
                     default=DEFAULT_UNAVAILABLE_BEHAVIOR,
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[
-                            SelectOptionDict(
-                                value=UNAVAILABLE_BEHAVIOR_STOP,
-                                label="Stop charging (0 A)",
-                            ),
-                            SelectOptionDict(
-                                value=UNAVAILABLE_BEHAVIOR_IGNORE,
-                                label="Ignore (keep last value)",
-                            ),
-                            SelectOptionDict(
-                                value=UNAVAILABLE_BEHAVIOR_SET_CURRENT,
-                                label="Set a specific current",
-                            ),
-                        ],
-                        mode=SelectSelectorMode.DROPDOWN,
-                        translation_key="unavailable_behavior",
-                    ),
-                ),
+                ): _UNAVAILABLE_BEHAVIOR_SELECTOR,
                 vol.Optional(
                     CONF_UNAVAILABLE_FALLBACK_CURRENT,
                     default=DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=0.0,
-                        max=MAX_CHARGER_CURRENT,
-                        step=1.0,
-                        unit_of_measurement="A",
-                        mode=NumberSelectorMode.BOX,
-                    ),
-                ),
+                ): _FALLBACK_CURRENT_SELECTOR,
                 vol.Optional(CONF_ACTION_SET_CURRENT): EntitySelector(
                     EntitySelectorConfig(domain="script"),
                 ),
@@ -207,65 +211,22 @@ class EvLbOptionsFlow(OptionsFlow):
                 vol.Required(
                     CONF_VOLTAGE,
                     default=current.get(CONF_VOLTAGE, DEFAULT_VOLTAGE),
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=MIN_VOLTAGE,
-                        max=MAX_VOLTAGE,
-                        step=1.0,
-                        unit_of_measurement="V",
-                        mode=NumberSelectorMode.BOX,
-                    ),
-                ),
+                ): _VOLTAGE_SELECTOR,
                 vol.Required(
                     CONF_MAX_SERVICE_CURRENT,
                     default=current.get(CONF_MAX_SERVICE_CURRENT, DEFAULT_MAX_SERVICE_CURRENT),
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=MIN_SERVICE_CURRENT,
-                        max=MAX_SERVICE_CURRENT,
-                        step=1.0,
-                        unit_of_measurement="A",
-                        mode=NumberSelectorMode.BOX,
-                    ),
-                ),
+                ): _SERVICE_CURRENT_SELECTOR,
                 vol.Required(
                     CONF_UNAVAILABLE_BEHAVIOR,
                     default=current.get(CONF_UNAVAILABLE_BEHAVIOR, DEFAULT_UNAVAILABLE_BEHAVIOR),
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[
-                            SelectOptionDict(
-                                value=UNAVAILABLE_BEHAVIOR_STOP,
-                                label="Stop charging (0 A)",
-                            ),
-                            SelectOptionDict(
-                                value=UNAVAILABLE_BEHAVIOR_IGNORE,
-                                label="Ignore (keep last value)",
-                            ),
-                            SelectOptionDict(
-                                value=UNAVAILABLE_BEHAVIOR_SET_CURRENT,
-                                label="Set a specific current",
-                            ),
-                        ],
-                        mode=SelectSelectorMode.DROPDOWN,
-                        translation_key="unavailable_behavior",
-                    ),
-                ),
+                ): _UNAVAILABLE_BEHAVIOR_SELECTOR,
                 vol.Optional(
                     CONF_UNAVAILABLE_FALLBACK_CURRENT,
                     default=current.get(
                         CONF_UNAVAILABLE_FALLBACK_CURRENT,
                         DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
                     ),
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=0.0,
-                        max=MAX_CHARGER_CURRENT,
-                        step=1.0,
-                        unit_of_measurement="A",
-                        mode=NumberSelectorMode.BOX,
-                    ),
-                ),
+                ): _FALLBACK_CURRENT_SELECTOR,
                 vol.Optional(
                     CONF_ACTION_SET_CURRENT,
                     description={
