@@ -134,6 +134,8 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 | `number.*_max_charger_current` | 1–80 A | The maximum current your charger can handle. The integration will never set a current higher than this. Change it at runtime to temporarily limit charging. |
 | `number.*_min_ev_current` | 1–32 A | The minimum current at which your charger can operate (IEC 61851 standard: 6 A for AC). If the computed target falls below this, charging stops entirely rather than running at an unsafe low current. |
 | `number.*_ramp_up_time` | 5–300 s | How many seconds the integration must wait after a current reduction before it allows the current to increase again. Lower values respond faster but risk oscillation on spiky loads. **Recommended: 20–30 s for most installations.** |
+| `number.*_overload_trigger_delay` | 1–60 s | How long a continuous overload must persist before the correction loop starts. The default (2 s) absorbs most transient spikes (kettles, washing machine spin) without triggering unnecessary adjustments. |
+| `number.*_overload_loop_interval` | 1–60 s | How often the integration re-applies a correction while an overload persists. The default (5 s) ensures fast recovery even when the power meter does not report new values (e.g., meters that only send updates on value change). |
 
 ### Switch
 
@@ -174,6 +176,7 @@ The balancer is **event-driven** — it does not poll on a timer. A recomputatio
 | **Max charger current changed** | User or automation changes the number entity. If meter is available, coordinator re-reads the current meter value and recomputes. If meter is unavailable, the fallback limit is re-applied with the new cap. | Instant. |
 | **Min EV current changed** | Same as above. If the new minimum is higher than the current target, charging stops immediately even while the meter is unavailable. | Instant. |
 | **Load balancing re-enabled** | The switch is turned back on. Full recomputation using current meter value. | Instant. |
+| **Overload correction loop** | When the system is overloaded, a time-based loop fires corrections at a configurable interval even if the meter has not reported a new value. | Every `overload_loop_interval` seconds. |
 
 > **When load balancing is disabled** (switch is off), power-meter events are ignored. The charger current stays at its last value. No action is taken until the switch is turned back on.
 
@@ -183,8 +186,9 @@ On each trigger:
 
 ```
 house_power_w = read power meter sensor
-ev_power_w    = current_ev_a × voltage_v          # EV's estimated draw
-non_ev_w      = max(0, house_power_w − ev_power_w) # non-EV household load
+ev_estimate_a = current_ev_a if EV is actively charging, else 0
+                (requires optional charger status sensor — see below)
+non_ev_w      = max(0, house_power_w − ev_estimate_a × voltage_v)
 available_a   = service_current_a − non_ev_w / voltage_v
 target_a      = min(available_a, max_charger_a), floored to 1 A steps
 ```
@@ -194,7 +198,12 @@ Then the safety rules apply:
 ```mermaid
 flowchart TD
     A([Trigger event])
-    A --> B["Isolate non-EV load<br/>non_ev_w = max(0, house_w − ev_a × V)"]
+    A --> Z{"Charger status sensor\nconfigured?"}
+    Z -- "No sensor / unknown state" --> ZA["ev_estimate = current_set_a\n(assume charging)"]
+    Z -- "Sensor state == 'Charging'" --> ZA
+    Z -- "Sensor state != 'Charging'" --> ZB["ev_estimate = 0\n(EV not drawing)"]
+    ZA --> B["Isolate non-EV load<br/>non_ev_w = max(0, house_w − ev_estimate × V)"]
+    ZB --> B
     B --> C["available_a = service_a − non_ev_w / V<br/>target_a = min(available_a, max_charger_a), floor to 1 A step"]
     C --> D{"target_a < min_ev_a?"}
     D -- YES --> E(["stop_charging — instant"])
@@ -212,6 +221,69 @@ flowchart TD
 **Increases are delayed by a configurable cooldown period** (default: 30 seconds, adjustable via `number.*_ramp_up_time`) after any reduction because household loads often fluctuate. Without this cooldown, the charger would rapidly oscillate between high and low current every few seconds when load hovers near the service limit. The cooldown gives transient loads (kettles, microwaves, washing machine spin cycles) time to settle before ramping back up.
 
 > ⚠️ **Very low cooldown values (below ~10 s) risk instability** if your household load has frequent spikes or is unpredictable. The recommended minimum is 20–30 s for most installations.
+
+---
+
+## Charger status sensor (optional)
+
+By default the coordinator estimates the EV's draw using the last commanded current — even when the charger is paused, the car is full, or the cable was unplugged. This means the balancer "gives" the EV headroom that it isn't actually using.
+
+If you have a sensor that reports whether the charger is actively drawing current (e.g., an OCPP `charger_status` sensor), you can configure it in the integration options:
+
+```
+Settings → Devices → EV Charger Load Balancer → Configure → Charger status sensor
+```
+
+When a status sensor is configured:
+
+| Sensor state | EV draw estimate used |
+|---|---|
+| `Charging` | `current_set_a` (normal subtraction) |
+| Anything else (`Available`, `Finishing`, `Preparing`, etc.) | `0` — EV is not drawing |
+| `unavailable` / `unknown` | `current_set_a` (safe fallback — assume charging) |
+| No sensor configured | `current_set_a` (original behaviour) |
+
+> **Safe-side default.** When the sensor is uncertain, the integration falls back to assuming the EV is charging. This may slightly over-subtract headroom (original behaviour), but it will never under-subtract, which could cause an overload.
+
+---
+
+## Overload correction loop
+
+Some smart meters only report a new state when their reading changes (e.g., Zigbee/Z-Wave meters with a reporting threshold). If an overload keeps the meter reading steady, the balancer would receive no new events and could leave the system in an overloaded state indefinitely.
+
+The overload correction loop solves this:
+
+```mermaid
+sequenceDiagram
+    participant Meter as Power Meter
+    participant C as Coordinator
+    participant T as Trigger Timer (2 s default)
+    participant L as Loop Timer (5 s default)
+
+    Meter->>C: state_change — high load
+    C->>C: _recompute() → available = −4 A (overloaded)
+    C->>T: schedule trigger in 2 s
+
+    Note over Meter,C: Meter does not report again (value unchanged)
+
+    T->>C: trigger fires after 2 s
+    C->>C: re-read meter → apply correction
+    C->>L: start loop — fire every 5 s
+
+    loop Every 5 s while still overloaded
+        L->>C: loop tick
+        C->>C: re-read meter → apply correction
+    end
+
+    Meter->>C: state_change — load reduced
+    C->>C: _recompute() → available = +8 A (clear)
+    C->>L: cancel loop
+    C->>T: cancel trigger (if pending)
+```
+
+**Why a trigger delay?** A sudden 2-second spike from a kettle or microwave would otherwise trigger an immediate correction and lock out current increases for the duration of the ramp-up cooldown. The trigger delay ignores transient spikes while still reacting to sustained overloads within a comfortable time.
+
+Both timing values are tunable at runtime via the Number entities `number.*_overload_trigger_delay` (default 2 s) and `number.*_overload_loop_interval` (default 5 s).
 
 ---
 

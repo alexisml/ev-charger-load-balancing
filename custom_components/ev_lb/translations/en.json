@@ -12,7 +12,8 @@
           "unavailable_fallback_current": "Fallback current (for 'Set a specific current' mode)",
           "action_set_current": "Set current action (script)",
           "action_stop_charging": "Stop charging action (script)",
-          "action_start_charging": "Start charging action (script)"
+          "action_start_charging": "Start charging action (script)",
+          "charger_status_entity": "Charger status sensor (optional)"
         },
         "data_description": {
           "power_meter_entity": "Sensor entity that reports total household power consumption in Watts.",
@@ -22,7 +23,8 @@
           "unavailable_fallback_current": "Charging current (A) to use when the meter is unavailable and mode is 'Set a specific current'. This value will be capped at the charger maximum.",
           "action_set_current": "Script entity called to set the charging current. Receives 'current_a' (amps), 'current_w' (watts), and 'charger_id' variables.",
           "action_stop_charging": "Script entity called to stop charging when headroom is insufficient. Receives a 'charger_id' variable.",
-          "action_start_charging": "Script entity called to start/resume charging after it was stopped. Receives a 'charger_id' variable."
+          "action_start_charging": "Script entity called to start/resume charging after it was stopped. Receives a 'charger_id' variable.",
+          "charger_status_entity": "Sensor whose state equals 'Charging' when the EV is actively charging (e.g. from the OCPP integration). When set, the balancer uses this to avoid over-subtracting headroom while the charger is idle or finished."
         }
       }
     },
@@ -41,12 +43,14 @@
         "data": {
           "action_set_current": "Set current action (script)",
           "action_stop_charging": "Stop charging action (script)",
-          "action_start_charging": "Start charging action (script)"
+          "action_start_charging": "Start charging action (script)",
+          "charger_status_entity": "Charger status sensor (optional)"
         },
         "data_description": {
           "action_set_current": "Script entity called to set the charging current. Receives 'current_a' (float, amps), 'current_w' (float, watts), and 'charger_id' (string) variables.",
           "action_stop_charging": "Script entity called to stop charging. Receives a 'charger_id' (string) variable.",
-          "action_start_charging": "Script entity called to start/resume charging. Receives a 'charger_id' (string) variable."
+          "action_start_charging": "Script entity called to start/resume charging. Receives a 'charger_id' (string) variable.",
+          "charger_status_entity": "Sensor whose state equals 'Charging' when the EV is actively charging (e.g. from the OCPP integration). When set, the balancer uses this to avoid over-subtracting headroom while the charger is idle or finished."
         }
       }
     }
@@ -92,6 +96,12 @@
       },
       "ramp_up_time": {
         "name": "Ramp-up cooldown"
+      },
+      "overload_trigger_delay": {
+        "name": "Overload trigger delay"
+      },
+      "overload_loop_interval": {
+        "name": "Overload correction interval"
       }
     },
     "switch": {

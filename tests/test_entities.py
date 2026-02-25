@@ -19,6 +19,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.ev_lb.const import (
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
+    DEFAULT_OVERLOAD_LOOP_INTERVAL,
+    DEFAULT_OVERLOAD_TRIGGER_DELAY,
     DEFAULT_RAMP_UP_TIME,
     DOMAIN,
     STATE_STOPPED,
@@ -59,7 +61,7 @@ class TestDeviceRegistration:
         entries = er.async_entries_for_config_entry(
             ent_reg, mock_config_entry.entry_id
         )
-        assert len(entries) == 13  # 6 sensors + 3 binary_sensors + 3 numbers + 1 switch
+        assert len(entries) == 15  # 6 sensors + 3 binary_sensors + 5 numbers + 1 switch
 
         dev_reg = dr.async_get(hass)
         device = dev_reg.async_get_device(
@@ -100,6 +102,8 @@ class TestUniqueIds:
             "max_charger_current",
             "min_ev_current",
             "ramp_up_time",
+            "overload_trigger_delay",
+            "overload_loop_interval",
             "enabled",
         }
         actual_suffixes = set()
@@ -394,6 +398,78 @@ class TestNumberEntities:
         assert float(state.state) == 60.0
         assert coordinator.ramp_up_time_s == 60.0
 
+    async def test_overload_trigger_delay_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Overload trigger delay number starts at the default (2 s)."""
+        await setup_integration(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "number", DOMAIN, f"{mock_config_entry.entry_id}_overload_trigger_delay"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert float(state.state) == DEFAULT_OVERLOAD_TRIGGER_DELAY
+
+    async def test_overload_trigger_delay_set_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Overload trigger delay can be updated and the coordinator receives the new value."""
+        await setup_integration(hass, mock_config_entry)
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "number", DOMAIN, f"{mock_config_entry.entry_id}_overload_trigger_delay"
+        )
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": entity_id, "value": 5.0},
+            blocking=True,
+        )
+        state = hass.states.get(entity_id)
+        assert float(state.state) == 5.0
+        assert coordinator.overload_trigger_delay_s == 5.0
+
+    async def test_overload_loop_interval_initial_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Overload loop interval number starts at the default (5 s)."""
+        await setup_integration(hass, mock_config_entry)
+
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "number", DOMAIN, f"{mock_config_entry.entry_id}_overload_loop_interval"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
+        assert state is not None
+        assert float(state.state) == DEFAULT_OVERLOAD_LOOP_INTERVAL
+
+    async def test_overload_loop_interval_set_value(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Overload loop interval can be updated and the coordinator receives the new value."""
+        await setup_integration(hass, mock_config_entry)
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        ent_reg = er.async_get(hass)
+        entity_id = ent_reg.async_get_entity_id(
+            "number", DOMAIN, f"{mock_config_entry.entry_id}_overload_loop_interval"
+        )
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": entity_id, "value": 10.0},
+            blocking=True,
+        )
+        state = hass.states.get(entity_id)
+        assert float(state.state) == 10.0
+        assert coordinator.overload_loop_interval_s == 10.0
+
 
 # ---------------------------------------------------------------------------
 # Switch entity
@@ -476,7 +552,7 @@ class TestUnload:
         entries_before = er.async_entries_for_config_entry(
             ent_reg, mock_config_entry.entry_id
         )
-        assert len(entries_before) == 13
+        assert len(entries_before) == 15
 
         await hass.config_entries.async_unload(mock_config_entry.entry_id)
         await hass.async_block_till_done()

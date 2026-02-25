@@ -28,6 +28,10 @@ CONF_ACTION_SET_CURRENT = "action_set_current"
 CONF_ACTION_STOP_CHARGING = "action_stop_charging"
 CONF_ACTION_START_CHARGING = "action_start_charging"
 
+# Charger status sensor config key and expected state value
+CONF_CHARGER_STATUS_ENTITY = "charger_status_entity"
+CHARGING_STATE_VALUE = "Charging"
+
 # Unavailable behavior options
 UNAVAILABLE_BEHAVIOR_STOP = "stop"
 UNAVAILABLE_BEHAVIOR_IGNORE = "ignore"
@@ -41,6 +45,8 @@ DEFAULT_MAX_CHARGER_CURRENT = 32.0
 DEFAULT_MIN_EV_CURRENT = 6.0
 DEFAULT_RAMP_UP_TIME = 30.0  # Seconds — cooldown before allowing current increase
 DEFAULT_UNAVAILABLE_FALLBACK_CURRENT = 6.0  # Fallback current for "set_current" mode
+DEFAULT_OVERLOAD_TRIGGER_DELAY = 2.0  # Seconds — overload must persist this long before loop starts
+DEFAULT_OVERLOAD_LOOP_INTERVAL = 5.0  # Seconds — interval between recomputes while overloaded
 
 # Dispatcher signal template — format with entry_id
 SIGNAL_UPDATE_FMT = f"{DOMAIN}_update_{{entry_id}}"
@@ -56,6 +62,10 @@ MIN_EV_CURRENT_MIN = 1.0
 MIN_EV_CURRENT_MAX = 32.0
 MIN_RAMP_UP_TIME = 5.0   # Seconds — absolute minimum (very low values risk oscillation)
 MAX_RAMP_UP_TIME = 300.0  # Seconds — 5 minutes maximum
+MIN_OVERLOAD_TRIGGER_DELAY = 1.0   # Seconds — minimum trigger delay
+MAX_OVERLOAD_TRIGGER_DELAY = 60.0  # Seconds — maximum trigger delay
+MIN_OVERLOAD_LOOP_INTERVAL = 1.0   # Seconds — minimum loop interval
+MAX_OVERLOAD_LOOP_INTERVAL = 60.0  # Seconds — maximum loop interval
 
 # Safety guardrails — defense-in-depth limits that should never be exceeded
 # regardless of user configuration or sensor values.

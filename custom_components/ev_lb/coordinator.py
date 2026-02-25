@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event, async_track_time_interval
 
 from homeassistant.components.persistent_notification import (
     async_create as pn_async_create,
@@ -30,13 +31,17 @@ from .const import (
     CONF_ACTION_SET_CURRENT,
     CONF_ACTION_START_CHARGING,
     CONF_ACTION_STOP_CHARGING,
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
     CONF_UNAVAILABLE_BEHAVIOR,
     CONF_UNAVAILABLE_FALLBACK_CURRENT,
     CONF_VOLTAGE,
+    CHARGING_STATE_VALUE,
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
+    DEFAULT_OVERLOAD_LOOP_INTERVAL,
+    DEFAULT_OVERLOAD_TRIGGER_DELAY,
     DEFAULT_RAMP_UP_TIME,
     DEFAULT_UNAVAILABLE_BEHAVIOR,
     DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
@@ -55,15 +60,18 @@ from .const import (
     REASON_POWER_METER_UPDATE,
     SAFETY_MAX_POWER_METER_W,
     SIGNAL_UPDATE_FMT,
-    STATE_ACTIVE,
-    STATE_ADJUSTING,
     STATE_DISABLED,
-    STATE_RAMP_UP_HOLD,
     STATE_STOPPED,
-    UNAVAILABLE_BEHAVIOR_IGNORE,
-    UNAVAILABLE_BEHAVIOR_SET_CURRENT,
 )
-from .load_balancer import apply_ramp_up_limit, clamp_current, compute_target_current
+from .load_balancer import (
+    apply_ramp_up_limit,
+    clamp_current,
+    clamp_to_safe_output,
+    compute_fallback_reapply,
+    compute_target_current,
+    resolve_balancer_state,
+    resolve_fallback_current,
+)
 from ._log import get_logger
 
 _LOGGER = get_logger(__name__)
@@ -102,6 +110,8 @@ class EvLoadBalancerCoordinator:
         self.min_ev_current: float = DEFAULT_MIN_EV_CURRENT
         self.enabled: bool = True
         self.ramp_up_time_s: float = DEFAULT_RAMP_UP_TIME
+        self.overload_trigger_delay_s: float = DEFAULT_OVERLOAD_TRIGGER_DELAY
+        self.overload_loop_interval_s: float = DEFAULT_OVERLOAD_LOOP_INTERVAL
 
         # Computed state (read by sensor/binary-sensor entities)
         self.current_set_a: float = 0.0
@@ -117,6 +127,10 @@ class EvLoadBalancerCoordinator:
         self._last_reduction_time: float | None = None
         self._time_fn = time.monotonic
 
+        # Overload correction loop tracking
+        self._overload_trigger_unsub: Callable[[], None] | None = None
+        self._overload_loop_unsub: Callable[[], None] | None = None
+
         # Dispatcher signal name
         self.signal_update: str = SIGNAL_UPDATE_FMT.format(
             entry_id=entry.entry_id,
@@ -131,7 +145,7 @@ class EvLoadBalancerCoordinator:
         return round(self.current_set_a * self._voltage, 1)
 
     def _init_action_scripts(self, entry: ConfigEntry) -> None:
-        """Load action script entity IDs from the config entry.
+        """Load action script entity IDs and charger status sensor from the config entry.
 
         Prefers options over data so changes via options flow take
         effect without deleting and re-creating the config entry.
@@ -147,6 +161,10 @@ class EvLoadBalancerCoordinator:
         self._action_start_charging: str | None = entry.options.get(
             CONF_ACTION_START_CHARGING,
             entry.data.get(CONF_ACTION_START_CHARGING),
+        )
+        self._charger_status_entity: str | None = entry.options.get(
+            CONF_CHARGER_STATUS_ENTITY,
+            entry.data.get(CONF_CHARGER_STATUS_ENTITY),
         )
 
     # ------------------------------------------------------------------
@@ -197,6 +215,7 @@ class EvLoadBalancerCoordinator:
         if self._unsub_listener is not None:
             self._unsub_listener()
             self._unsub_listener = None
+        self._cancel_overload_timers()
         _LOGGER.debug("Coordinator stopped")
 
     @callback
@@ -255,6 +274,7 @@ class EvLoadBalancerCoordinator:
             return
 
         if is_unavailable:
+            self._cancel_overload_timers()
             self._apply_fallback_current()
             return
 
@@ -276,6 +296,7 @@ class EvLoadBalancerCoordinator:
             return
 
         self._recompute(service_power_w)
+        self._update_overload_timers()
 
     # ------------------------------------------------------------------
     # On-demand recompute (triggered by number/switch changes)
@@ -375,16 +396,13 @@ class EvLoadBalancerCoordinator:
         - **ignore**: re-clamps ``current_set_a`` to the new charger limits
           and updates if the value has changed.
         """
-        if self._unavailable_behavior == UNAVAILABLE_BEHAVIOR_SET_CURRENT:
-            target = min(self._unavailable_fallback_a, self.max_charger_current)
-        elif self._unavailable_behavior == UNAVAILABLE_BEHAVIOR_IGNORE:
-            clamped = clamp_current(
-                self.current_set_a, self.max_charger_current, self.min_ev_current
-            )
-            target = 0.0 if clamped is None else clamped
-        else:
-            # UNAVAILABLE_BEHAVIOR_STOP: stop charging
-            target = 0.0
+        target = compute_fallback_reapply(
+            self._unavailable_behavior,
+            self._unavailable_fallback_a,
+            self.max_charger_current,
+            self.current_set_a,
+            self.min_ev_current,
+        )
 
         if target != self.current_set_a:
             _LOGGER.debug(
@@ -420,45 +438,147 @@ class EvLoadBalancerCoordinator:
         ``0.0`` for stop mode, or the configured fallback capped at the
         charger maximum for set-current mode.
         """
-        behavior = self._unavailable_behavior
-
-        if behavior == UNAVAILABLE_BEHAVIOR_IGNORE:
+        result = resolve_fallback_current(
+            self._unavailable_behavior,
+            self._unavailable_fallback_a,
+            self.max_charger_current,
+        )
+        if result is None:
             _LOGGER.debug(
                 "Power meter %s is unavailable — ignoring (keeping last value %.1f A)",
                 self._power_meter_entity,
                 self.current_set_a,
             )
-            return None
-
-        if behavior == UNAVAILABLE_BEHAVIOR_SET_CURRENT:
-            fallback = min(self._unavailable_fallback_a, self.max_charger_current)
+        elif result == 0.0:
+            _LOGGER.warning(
+                "Power meter %s is unavailable — stopping charging (0 A)",
+                self._power_meter_entity,
+            )
+        else:
             _LOGGER.warning(
                 "Power meter %s is unavailable — applying fallback current %.1f A "
                 "(configured %.1f A, capped to max charger current %.1f A)",
                 self._power_meter_entity,
-                fallback,
+                result,
                 self._unavailable_fallback_a,
                 self.max_charger_current,
             )
-            return fallback
-
-        # UNAVAILABLE_BEHAVIOR_STOP (or unrecognised value): stop charging as the safest default
-        _LOGGER.warning(
-            "Power meter %s is unavailable — stopping charging (0 A)",
-            self._power_meter_entity,
-        )
-        return 0.0
+        return result
 
     # ------------------------------------------------------------------
     # Core computation
     # ------------------------------------------------------------------
 
+    def _is_ev_charging(self) -> bool:
+        """Return True if the charger status sensor indicates the EV is actively charging.
+
+        When no status sensor is configured, the coordinator assumes the EV is
+        drawing current equal to the last commanded value.  When a sensor is
+        configured, the EV draw estimate is zeroed out if the sensor's state is
+        not 'Charging' — this prevents the balancer from over-subtracting headroom
+        when the charger is idle, paused, or finished.
+        """
+        if self._charger_status_entity is None:
+            return True  # No sensor configured; assume charging when current > 0
+        state = self.hass.states.get(self._charger_status_entity)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return True  # Sensor unavailable; safe fallback — assume charging
+        return state.state == CHARGING_STATE_VALUE
+
+    # ------------------------------------------------------------------
+    # Overload correction loop
+    # ------------------------------------------------------------------
+
+    def _update_overload_timers(self) -> None:
+        """Start or cancel the overload correction loop based on the latest available current.
+
+        Called after every normal recompute triggered by a power-meter event.
+        When the system is overloaded (available current < 0) and no loop is
+        already running, schedules a trigger after *overload_trigger_delay_s*
+        seconds.  When the system is no longer overloaded, all pending timers
+        are cancelled immediately.
+        """
+        if self.available_current_a < 0:
+            if self._overload_trigger_unsub is None and self._overload_loop_unsub is None:
+                self._overload_trigger_unsub = async_call_later(
+                    self.hass,
+                    self.overload_trigger_delay_s,
+                    self._on_overload_triggered,
+                )
+                _LOGGER.debug(
+                    "Overload detected (%.1f A) — correction loop starts in %.0f s",
+                    self.available_current_a,
+                    self.overload_trigger_delay_s,
+                )
+        else:
+            self._cancel_overload_timers()
+
+    def _cancel_overload_timers(self) -> None:
+        """Cancel any pending overload trigger delay and running correction loop."""
+        if self._overload_trigger_unsub is not None:
+            self._overload_trigger_unsub()
+            self._overload_trigger_unsub = None
+        if self._overload_loop_unsub is not None:
+            self._overload_loop_unsub()
+            self._overload_loop_unsub = None
+
+    @callback
+    def _on_overload_triggered(self, _now) -> None:
+        """Fire the first correction after the trigger delay has elapsed.
+
+        If the system is still overloaded, applies an immediate correction and
+        starts the periodic loop.  If the overload has already cleared, does
+        nothing.
+        """
+        self._overload_trigger_unsub = None
+        self._force_recompute_from_meter()
+        if self.available_current_a < 0 and self._overload_loop_unsub is None:
+            self._overload_loop_unsub = async_track_time_interval(
+                self.hass,
+                self._overload_loop_callback,
+                timedelta(seconds=self.overload_loop_interval_s),
+            )
+            _LOGGER.debug(
+                "Overload persists — correction loop running every %.0f s",
+                self.overload_loop_interval_s,
+            )
+
+    @callback
+    def _overload_loop_callback(self, _now) -> None:
+        """Re-run the balancing algorithm during the overload correction loop.
+
+        Called periodically while the system is overloaded.  Cancels the loop
+        once the available current returns to zero or above.
+        """
+        self._force_recompute_from_meter()
+        if self.available_current_a >= 0:
+            _LOGGER.debug("Overload cleared — stopping correction loop")
+            self._cancel_overload_timers()
+
+    def _force_recompute_from_meter(self) -> None:
+        """Read the current power-meter state and recompute without waiting for a state change."""
+        if not self.enabled:
+            return
+        state = self.hass.states.get(self._power_meter_entity)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return
+        try:
+            service_power_w = float(state.state)
+        except (ValueError, TypeError):
+            return
+        if abs(service_power_w) > SAFETY_MAX_POWER_METER_W:
+            return
+        self._recompute(service_power_w)
+
     def _recompute(self, service_power_w: float, reason: str = REASON_POWER_METER_UPDATE) -> None:
         """Run the single-charger balancing algorithm and publish updates."""
         service_current_a = service_power_w / self._voltage
+        # When we know the EV is not actively charging, do not subtract its
+        # last commanded current from the available headroom estimate.
+        ev_current_estimate = self.current_set_a if self._is_ev_charging() else 0.0
         available_a, clamped = compute_target_current(
             service_current_a,
-            self.current_set_a,
+            ev_current_estimate,
             self._max_service_current,
             self.max_charger_current,
             self.min_ev_current,
@@ -496,7 +616,7 @@ class EvLoadBalancerCoordinator:
             )
 
         # Determine balancer operational state
-        ramp_up_held = final_a != target_a and final_a < target_a
+        ramp_up_held = final_a < target_a
 
         # Update computed state and execute actions
         self._update_and_notify(round(available_a, 2), final_a, reason, ramp_up_held)
@@ -522,18 +642,17 @@ class EvLoadBalancerCoordinator:
         the service or charger limits, even if upstream logic has a bug.
         """
         # Safety clamp: output must never exceed charger max or service limit
-        if current_a > 0:
-            safe_max = min(self.max_charger_current, self._max_service_current)
-            if current_a > safe_max:
-                _LOGGER.warning(
-                    "Safety clamp: computed %.1f A exceeds safe maximum %.1f A "
-                    "(charger_max=%.1f, service_max=%.1f) — clamping",
-                    current_a,
-                    safe_max,
-                    self.max_charger_current,
-                    self._max_service_current,
-                )
-                current_a = safe_max
+        clamped_a = clamp_to_safe_output(current_a, self.max_charger_current, self._max_service_current)
+        if clamped_a != current_a:
+            _LOGGER.warning(
+                "Safety clamp: computed %.1f A exceeds safe maximum %.1f A "
+                "(charger_max=%.1f, service_max=%.1f) — clamping",
+                current_a,
+                clamped_a,
+                self.max_charger_current,
+                self._max_service_current,
+            )
+            current_a = clamped_a
 
         prev_active = self.active
         prev_current = self.current_set_a
@@ -544,8 +663,8 @@ class EvLoadBalancerCoordinator:
         self.last_action_reason = reason
 
         # Determine balancer operational state
-        self.balancer_state = self._resolve_balancer_state(
-            prev_active, prev_current, ramp_up_held, reason,
+        self.balancer_state = resolve_balancer_state(
+            self.enabled, self.active, prev_active, prev_current, self.current_set_a, ramp_up_held,
         )
 
         # Log significant transitions at info level (low cadence)
@@ -565,34 +684,6 @@ class EvLoadBalancerCoordinator:
             )
 
         async_dispatcher_send(self.hass, self.signal_update)
-
-    def _resolve_balancer_state(
-        self,
-        prev_active: bool,
-        prev_current: float,
-        ramp_up_held: bool,
-        reason: str,
-    ) -> str:
-        """Determine the balancer's operational state for the diagnostic sensor.
-
-        Maps to the charger state transitions described in the README:
-        - **disabled**: load balancing switch is off
-        - **stopped**: charger target is 0 A
-        - **ramp_up_hold**: increase blocked by cooldown
-        - **adjusting**: current changed this cycle
-        - **active**: target current > 0 and unchanged (steady state)
-
-        Meter health and fallback status are tracked by separate sensors.
-        """
-        if not self.enabled:
-            return STATE_DISABLED
-        if not self.active:
-            return STATE_STOPPED
-        if ramp_up_held:
-            return STATE_RAMP_UP_HOLD
-        if self.current_set_a != prev_current or not prev_active:
-            return STATE_ADJUSTING
-        return STATE_ACTIVE
 
     # ------------------------------------------------------------------
     # Event notifications and persistent notifications
