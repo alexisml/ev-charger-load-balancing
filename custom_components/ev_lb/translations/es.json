@@ -39,7 +39,7 @@
     "step": {
       "init": {
         "title": "Configuración del Balanceador de Carga para VE",
-        "description": "Actualiza la configuración de la integración. El sensor de consumo eléctrico no puede cambiarse después de la configuración inicial.",
+        "description": "Actualiza la configuración de la integración. El sensor de consumo eléctrico no puede cambiarse una vez configurada la integración.",
         "data": {
           "voltage": "Voltaje de suministro",
           "max_service_current": "Corriente máxima del servicio (capacidad del interruptor)",
