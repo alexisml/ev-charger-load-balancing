@@ -151,6 +151,39 @@ def get_entity_id(
     return entity_id
 
 
+def meter_w(non_ev_a: float, ev_a: float, voltage: float = 230.0) -> str:
+    """Return the total meter reading in Watts for given non-EV and EV loads.
+
+    Produces the exact service draw seen by the meter: ``(non_ev_a + ev_a) * voltage``.
+    Use this when you know the individual load components and want to construct a
+    realistic power-meter reading for a test step.
+    """
+    return str(round((non_ev_a + ev_a) * voltage, 2))
+
+
+def meter_for_available(
+    desired_available_a: float,
+    current_set_a: float,
+    max_service_a: float = 32.0,
+    voltage: float = 230.0,
+) -> str:
+    """Return the meter reading (Watts string) that produces a target available_a.
+
+    Inverts the load-balancer formula::
+
+        available = max_service - non_ev
+        non_ev    = max_service - desired_available
+        service   = non_ev + current_set
+        meter_w   = service * voltage
+
+    Use this when you want to assert on a specific available-current value
+    and need to supply the corresponding meter reading.
+    """
+    non_ev_a = max_service_a - desired_available_a
+    service_current_a = non_ev_a + current_set_a
+    return str(round(service_current_a * voltage, 2))
+
+
 def collect_events(hass: HomeAssistant, event_type: str) -> list[dict]:
     """Subscribe to an HA event type and return a list of captured event data dicts.
 
