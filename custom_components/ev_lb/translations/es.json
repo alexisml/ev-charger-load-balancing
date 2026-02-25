@@ -96,6 +96,12 @@
       },
       "ramp_up_time": {
         "name": "Retardo de subida de corriente"
+      },
+      "overload_trigger_delay": {
+        "name": "Retardo de activación por sobrecarga"
+      },
+      "overload_loop_interval": {
+        "name": "Intervalo de corrección de sobrecarga"
       }
     },
     "switch": {

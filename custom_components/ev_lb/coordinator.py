@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event, async_track_time_interval
 
 from homeassistant.components.persistent_notification import (
     async_create as pn_async_create,
@@ -39,6 +40,8 @@ from .const import (
     CHARGING_STATE_VALUE,
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
+    DEFAULT_OVERLOAD_LOOP_INTERVAL,
+    DEFAULT_OVERLOAD_TRIGGER_DELAY,
     DEFAULT_RAMP_UP_TIME,
     DEFAULT_UNAVAILABLE_BEHAVIOR,
     DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
@@ -104,6 +107,8 @@ class EvLoadBalancerCoordinator:
         self.min_ev_current: float = DEFAULT_MIN_EV_CURRENT
         self.enabled: bool = True
         self.ramp_up_time_s: float = DEFAULT_RAMP_UP_TIME
+        self.overload_trigger_delay_s: float = DEFAULT_OVERLOAD_TRIGGER_DELAY
+        self.overload_loop_interval_s: float = DEFAULT_OVERLOAD_LOOP_INTERVAL
 
         # Computed state (read by sensor/binary-sensor entities)
         self.current_set_a: float = 0.0
@@ -118,6 +123,10 @@ class EvLoadBalancerCoordinator:
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None
         self._time_fn = time.monotonic
+
+        # Overload correction loop tracking
+        self._overload_trigger_unsub: Callable[[], None] | None = None
+        self._overload_loop_unsub: Callable[[], None] | None = None
 
         # Dispatcher signal name
         self.signal_update: str = SIGNAL_UPDATE_FMT.format(
@@ -203,6 +212,7 @@ class EvLoadBalancerCoordinator:
         if self._unsub_listener is not None:
             self._unsub_listener()
             self._unsub_listener = None
+        self._cancel_overload_timers()
         _LOGGER.debug("Coordinator stopped")
 
     @callback
@@ -261,6 +271,7 @@ class EvLoadBalancerCoordinator:
             return
 
         if is_unavailable:
+            self._cancel_overload_timers()
             self._apply_fallback_current()
             return
 
@@ -282,6 +293,7 @@ class EvLoadBalancerCoordinator:
             return
 
         self._recompute(service_power_w)
+        self._update_overload_timers()
 
     # ------------------------------------------------------------------
     # On-demand recompute (triggered by number/switch changes)
@@ -474,6 +486,91 @@ class EvLoadBalancerCoordinator:
         if state is None:
             return True  # Unknown state; assume charging to be safe
         return state.state == CHARGING_STATE_VALUE
+
+    # ------------------------------------------------------------------
+    # Overload correction loop
+    # ------------------------------------------------------------------
+
+    def _update_overload_timers(self) -> None:
+        """Start or cancel the overload correction loop based on the latest available current.
+
+        Called after every normal recompute triggered by a power-meter event.
+        When the system is overloaded (available current < 0) and no loop is
+        already running, schedules a trigger after *overload_trigger_delay_s*
+        seconds.  When the system is no longer overloaded, all pending timers
+        are cancelled immediately.
+        """
+        if self.available_current_a < 0:
+            if self._overload_trigger_unsub is None and self._overload_loop_unsub is None:
+                self._overload_trigger_unsub = async_call_later(
+                    self.hass,
+                    self.overload_trigger_delay_s,
+                    self._on_overload_triggered,
+                )
+                _LOGGER.debug(
+                    "Overload detected (%.1f A) — correction loop starts in %.0f s",
+                    self.available_current_a,
+                    self.overload_trigger_delay_s,
+                )
+        else:
+            self._cancel_overload_timers()
+
+    def _cancel_overload_timers(self) -> None:
+        """Cancel any pending overload trigger delay and running correction loop."""
+        if self._overload_trigger_unsub is not None:
+            self._overload_trigger_unsub()
+            self._overload_trigger_unsub = None
+        if self._overload_loop_unsub is not None:
+            self._overload_loop_unsub()
+            self._overload_loop_unsub = None
+
+    @callback
+    def _on_overload_triggered(self, _now) -> None:
+        """Fire the first correction after the trigger delay has elapsed.
+
+        If the system is still overloaded, applies an immediate correction and
+        starts the periodic loop.  If the overload has already cleared, does
+        nothing.
+        """
+        self._overload_trigger_unsub = None
+        self._force_recompute_from_meter()
+        if self.available_current_a < 0 and self._overload_loop_unsub is None:
+            self._overload_loop_unsub = async_track_time_interval(
+                self.hass,
+                self._overload_loop_callback,
+                timedelta(seconds=self.overload_loop_interval_s),
+            )
+            _LOGGER.debug(
+                "Overload persists — correction loop running every %.0f s",
+                self.overload_loop_interval_s,
+            )
+
+    @callback
+    def _overload_loop_callback(self, _now) -> None:
+        """Re-run the balancing algorithm during the overload correction loop.
+
+        Called periodically while the system is overloaded.  Cancels the loop
+        once the available current returns to zero or above.
+        """
+        self._force_recompute_from_meter()
+        if self.available_current_a >= 0:
+            _LOGGER.debug("Overload cleared — stopping correction loop")
+            self._cancel_overload_timers()
+
+    def _force_recompute_from_meter(self) -> None:
+        """Read the current power-meter state and recompute without waiting for a state change."""
+        if not self.enabled:
+            return
+        state = self.hass.states.get(self._power_meter_entity)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return
+        try:
+            service_power_w = float(state.state)
+        except (ValueError, TypeError):
+            return
+        if abs(service_power_w) > SAFETY_MAX_POWER_METER_W:
+            return
+        self._recompute(service_power_w)
 
     def _recompute(self, service_power_w: float, reason: str = REASON_POWER_METER_UPDATE) -> None:
         """Run the single-charger balancing algorithm and publish updates."""

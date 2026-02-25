@@ -96,6 +96,12 @@
       },
       "ramp_up_time": {
         "name": "Ramp-up cooldown"
+      },
+      "overload_trigger_delay": {
+        "name": "Overload trigger delay"
+      },
+      "overload_loop_interval": {
+        "name": "Overload correction interval"
       }
     },
     "switch": {
