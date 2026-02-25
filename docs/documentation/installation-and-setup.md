@@ -93,18 +93,34 @@ These are **optional**. If you skip them, the integration runs in compute-only m
 
 ### Changing settings after setup
 
-#### Changing action scripts
+Almost all settings can be changed at any time via the **Configure** dialog — no need to delete and re-add the integration.
 
-You can add, change, or remove action scripts at any time:
+#### What you can change
 
 1. Go to **Settings → Devices & Services → EV Charger Load Balancing**.
-2. Click **Configure**.
-3. Update the script selections.
-4. Click **Submit**. The integration reloads automatically with the new scripts.
+2. Click the **Configure** button (gear icon).
+3. Adjust any of the following and click **Submit**. The integration reloads automatically.
 
-#### Changing other settings
+| Setting | Changeable via Configure? |
+|---|---|
+| Supply voltage | ✅ Yes |
+| Max service current | ✅ Yes |
+| When power meter is unavailable | ✅ Yes |
+| Fallback current | ✅ Yes |
+| Set current action script | ✅ Yes |
+| Stop charging action script | ✅ Yes |
+| Start charging action script | ✅ Yes |
+| **Power meter sensor** | ❌ **No** — see below |
 
-To change the power meter sensor, voltage, service current, or unavailable behavior, you need to delete and re-add the integration. These fields are set during initial configuration and cannot be changed afterwards (this may be improved in a future release).
+#### Changing the power meter sensor
+
+The power meter sensor **cannot** be changed after setup. It acts as the unique identifier for the config entry — Home Assistant uses it internally to prevent duplicate instances and to track the integration across restarts.
+
+To switch to a different power meter sensor, you must **delete the integration and re-add it**:
+
+1. Go to **Settings → Devices & Services → EV Charger Load Balancing**.
+2. Click the three dots (⋮) → **Delete**.
+3. Add the integration again and select the new sensor during setup.
 
 ---
 

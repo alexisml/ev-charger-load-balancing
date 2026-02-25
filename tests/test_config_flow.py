@@ -291,3 +291,85 @@ async def test_user_flow_saves_charger_status_entity(hass: HomeAssistant) -> Non
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_CHARGER_STATUS_ENTITY] == "sensor.ocpp_status"
+
+
+async def test_options_flow_saves_voltage_and_service_current(
+    hass: HomeAssistant, mock_config_entry_no_actions: MockConfigEntry
+) -> None:
+    """Test that users can update voltage and max service current via the Configure dialog.
+
+    The options form should allow changing core electrical parameters so
+    users can correct mistakes or adapt to a new electrical installation
+    without deleting and re-creating the config entry.
+    """
+    mock_config_entry_no_actions.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(mock_config_entry_no_actions.entry_id)
+    assert result["type"] is FlowResultType.FORM
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_VOLTAGE: 120.0,
+            CONF_MAX_SERVICE_CURRENT: 50.0,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_VOLTAGE] == 120.0
+    assert result["data"][CONF_MAX_SERVICE_CURRENT] == 50.0
+
+
+async def test_options_flow_saves_unavailable_behavior(
+    hass: HomeAssistant, mock_config_entry_no_actions: MockConfigEntry
+) -> None:
+    """Test that users can change the unavailable-meter behavior via the Configure dialog.
+
+    Changing this setting should allow users to switch between stop, ignore,
+    and set-current modes without recreating the integration.
+    """
+    mock_config_entry_no_actions.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(mock_config_entry_no_actions.entry_id)
+    assert result["type"] is FlowResultType.FORM
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_VOLTAGE: 230.0,
+            CONF_MAX_SERVICE_CURRENT: 32.0,
+            CONF_UNAVAILABLE_BEHAVIOR: "set_current",
+            CONF_UNAVAILABLE_FALLBACK_CURRENT: 8.0,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_UNAVAILABLE_BEHAVIOR] == "set_current"
+    assert result["data"][CONF_UNAVAILABLE_FALLBACK_CURRENT] == 8.0
+
+
+async def test_options_flow_prefills_current_values(
+    hass: HomeAssistant, mock_config_entry_no_actions: MockConfigEntry
+) -> None:
+    """Test that the options form is pre-filled with the current configuration values.
+
+    When the user opens the Configure dialog, they should see the current
+    settings rather than defaults, preventing accidental overwrites.
+    """
+    mock_config_entry_no_actions.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(mock_config_entry_no_actions.entry_id)
+    assert result["type"] is FlowResultType.FORM
+
+    schema: vol.Schema = result["data_schema"]
+    # Find the voltage key and verify its default matches the config entry value
+    voltage_key = next(
+        k for k in schema.schema if getattr(k, "schema", None) == CONF_VOLTAGE
+    )
+    assert voltage_key.default() == mock_config_entry_no_actions.data[CONF_VOLTAGE]
+
+    # Find the max_service_current key and verify its default
+    service_current_key = next(
+        k for k in schema.schema if getattr(k, "schema", None) == CONF_MAX_SERVICE_CURRENT
+    )
+    assert service_current_key.default() == mock_config_entry_no_actions.data[CONF_MAX_SERVICE_CURRENT]

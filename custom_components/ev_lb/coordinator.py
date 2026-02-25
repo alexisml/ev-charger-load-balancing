@@ -90,15 +90,17 @@ class EvLoadBalancerCoordinator:
         self.hass = hass
         self.entry = entry
 
-        # Config entry values (immutable for the lifetime of this coordinator)
-        self._voltage: float = entry.data[CONF_VOLTAGE]
-        self._max_service_current: float = entry.data[CONF_MAX_SERVICE_CURRENT]
+        # Config entry values — options take priority over data so changes
+        # made via the Configure dialog take effect after the entry reloads.
+        _cfg = {**entry.data, **entry.options}
+        self._voltage: float = _cfg[CONF_VOLTAGE]
+        self._max_service_current: float = _cfg[CONF_MAX_SERVICE_CURRENT]
         self._power_meter_entity: str = entry.data[CONF_POWER_METER_ENTITY]
-        self._unavailable_behavior: str = entry.data.get(
+        self._unavailable_behavior: str = _cfg.get(
             CONF_UNAVAILABLE_BEHAVIOR,
             DEFAULT_UNAVAILABLE_BEHAVIOR,
         )
-        self._unavailable_fallback_a: float = entry.data.get(
+        self._unavailable_fallback_a: float = _cfg.get(
             CONF_UNAVAILABLE_FALLBACK_CURRENT,
             DEFAULT_UNAVAILABLE_FALLBACK_CURRENT,
         )
