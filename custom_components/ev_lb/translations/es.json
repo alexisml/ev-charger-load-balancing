@@ -12,7 +12,8 @@
           "unavailable_fallback_current": "Corriente de respaldo (para modo 'Establecer una corriente específica')",
           "action_set_current": "Acción para establecer corriente (script)",
           "action_stop_charging": "Acción para detener carga (script)",
-          "action_start_charging": "Acción para iniciar carga (script)"
+          "action_start_charging": "Acción para iniciar carga (script)",
+          "charger_status_entity": "Sensor de estado del cargador (opcional)"
         },
         "data_description": {
           "power_meter_entity": "Entidad de sensor que reporta el consumo eléctrico total del hogar en Watts.",
@@ -22,7 +23,8 @@
           "unavailable_fallback_current": "Corriente de carga (A) a usar cuando el medidor no está disponible y el modo es 'Establecer una corriente específica'. Este valor se limitará a la corriente máxima del cargador.",
           "action_set_current": "Entidad de script para establecer la corriente de carga. Recibe variables 'current_a' (amperios), 'current_w' (vatios) y 'charger_id'.",
           "action_stop_charging": "Entidad de script para detener la carga cuando no hay suficiente capacidad disponible. Recibe una variable 'charger_id'.",
-          "action_start_charging": "Entidad de script para iniciar/reanudar la carga después de haber sido detenida. Recibe una variable 'charger_id'."
+          "action_start_charging": "Entidad de script para iniciar/reanudar la carga después de haber sido detenida. Recibe una variable 'charger_id'.",
+          "charger_status_entity": "Sensor cuyo estado es 'Charging' cuando el VE está cargando activamente (p. ej. de la integración OCPP). Cuando se configura, el balanceador lo usa para evitar restar demasiado margen cuando el cargador está inactivo o terminado."
         }
       }
     },
@@ -41,12 +43,14 @@
         "data": {
           "action_set_current": "Acción para establecer corriente (script)",
           "action_stop_charging": "Acción para detener carga (script)",
-          "action_start_charging": "Acción para iniciar carga (script)"
+          "action_start_charging": "Acción para iniciar carga (script)",
+          "charger_status_entity": "Sensor de estado del cargador (opcional)"
         },
         "data_description": {
           "action_set_current": "Entidad de script para establecer la corriente de carga. Recibe variables 'current_a' (flotante, amperios), 'current_w' (flotante, vatios) y 'charger_id' (texto).",
           "action_stop_charging": "Entidad de script para detener la carga. Recibe una variable 'charger_id' (texto).",
-          "action_start_charging": "Entidad de script para iniciar/reanudar la carga. Recibe una variable 'charger_id' (texto)."
+          "action_start_charging": "Entidad de script para iniciar/reanudar la carga. Recibe una variable 'charger_id' (texto).",
+          "charger_status_entity": "Sensor cuyo estado es 'Charging' cuando el VE está cargando activamente (p. ej. de la integración OCPP). Cuando se configura, el balanceador lo usa para evitar restar demasiado margen cuando el cargador está inactivo o terminado."
         }
       }
     }

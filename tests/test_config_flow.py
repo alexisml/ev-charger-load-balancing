@@ -21,6 +21,7 @@ from custom_components.ev_lb.const import (
     CONF_ACTION_SET_CURRENT,
     CONF_ACTION_START_CHARGING,
     CONF_ACTION_STOP_CHARGING,
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
     CONF_UNAVAILABLE_BEHAVIOR,
@@ -190,3 +191,51 @@ async def test_options_flow_saves_action_scripts(
     assert result["data"][CONF_ACTION_SET_CURRENT] == "script.ev_lb_set_current"
     assert result["data"][CONF_ACTION_STOP_CHARGING] == "script.ev_lb_stop_charging"
     assert result["data"][CONF_ACTION_START_CHARGING] == "script.ev_lb_start_charging"
+
+
+async def test_options_flow_saves_charger_status_entity(
+    hass: HomeAssistant, mock_config_entry_no_actions: MockConfigEntry
+) -> None:
+    """Test that users can configure the charger status sensor via the Configure dialog.
+
+    The charger status entity should be persisted alongside the action scripts
+    so the coordinator can check charging state on every meter update.
+    """
+    mock_config_entry_no_actions.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(mock_config_entry_no_actions.entry_id)
+    assert result["type"] is FlowResultType.FORM
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_CHARGER_STATUS_ENTITY: "sensor.ocpp_status"},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_CHARGER_STATUS_ENTITY] == "sensor.ocpp_status"
+
+
+async def test_user_flow_saves_charger_status_entity(hass: HomeAssistant) -> None:
+    """Test that the charger status sensor can be set during initial integration setup.
+
+    The entity is optional — providing it during setup should store it in the
+    config entry data alongside the other configuration fields.
+    """
+    hass.states.async_set("sensor.house_power_w", "3000")
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_POWER_METER_ENTITY: "sensor.house_power_w",
+            CONF_VOLTAGE: 230.0,
+            CONF_MAX_SERVICE_CURRENT: 32.0,
+            CONF_CHARGER_STATUS_ENTITY: "sensor.ocpp_status",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_CHARGER_STATUS_ENTITY] == "sensor.ocpp_status"

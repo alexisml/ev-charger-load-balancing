@@ -30,11 +30,13 @@ from .const import (
     CONF_ACTION_SET_CURRENT,
     CONF_ACTION_START_CHARGING,
     CONF_ACTION_STOP_CHARGING,
+    CONF_CHARGER_STATUS_ENTITY,
     CONF_MAX_SERVICE_CURRENT,
     CONF_POWER_METER_ENTITY,
     CONF_UNAVAILABLE_BEHAVIOR,
     CONF_UNAVAILABLE_FALLBACK_CURRENT,
     CONF_VOLTAGE,
+    CHARGING_STATE_VALUE,
     DEFAULT_MAX_CHARGER_CURRENT,
     DEFAULT_MIN_EV_CURRENT,
     DEFAULT_RAMP_UP_TIME,
@@ -131,7 +133,7 @@ class EvLoadBalancerCoordinator:
         return round(self.current_set_a * self._voltage, 1)
 
     def _init_action_scripts(self, entry: ConfigEntry) -> None:
-        """Load action script entity IDs from the config entry.
+        """Load action script entity IDs and charger status sensor from the config entry.
 
         Prefers options over data so changes via options flow take
         effect without deleting and re-creating the config entry.
@@ -147,6 +149,10 @@ class EvLoadBalancerCoordinator:
         self._action_start_charging: str | None = entry.options.get(
             CONF_ACTION_START_CHARGING,
             entry.data.get(CONF_ACTION_START_CHARGING),
+        )
+        self._charger_status_entity: str | None = entry.options.get(
+            CONF_CHARGER_STATUS_ENTITY,
+            entry.data.get(CONF_CHARGER_STATUS_ENTITY),
         )
 
     # ------------------------------------------------------------------
@@ -453,12 +459,31 @@ class EvLoadBalancerCoordinator:
     # Core computation
     # ------------------------------------------------------------------
 
+    def _is_ev_charging(self) -> bool:
+        """Return True if the charger status sensor indicates the EV is actively charging.
+
+        When no status sensor is configured, the coordinator assumes the EV is
+        drawing current equal to the last commanded value.  When a sensor is
+        configured, the EV draw estimate is zeroed out if the sensor's state is
+        not 'Charging' — this prevents the balancer from over-subtracting headroom
+        when the charger is idle, paused, or finished.
+        """
+        if self._charger_status_entity is None:
+            return True  # No sensor configured; assume charging when current > 0
+        state = self.hass.states.get(self._charger_status_entity)
+        if state is None:
+            return True  # Unknown state; assume charging to be safe
+        return state.state == CHARGING_STATE_VALUE
+
     def _recompute(self, service_power_w: float, reason: str = REASON_POWER_METER_UPDATE) -> None:
         """Run the single-charger balancing algorithm and publish updates."""
         service_current_a = service_power_w / self._voltage
+        # When we know the EV is not actively charging, do not subtract its
+        # last commanded current from the available headroom estimate.
+        ev_current_estimate = self.current_set_a if self._is_ev_charging() else 0.0
         available_a, clamped = compute_target_current(
             service_current_a,
-            self.current_set_a,
+            ev_current_estimate,
             self._max_service_current,
             self.max_charger_current,
             self.min_ev_current,

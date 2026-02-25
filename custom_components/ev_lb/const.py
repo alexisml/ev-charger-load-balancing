@@ -28,6 +28,10 @@ CONF_ACTION_SET_CURRENT = "action_set_current"
 CONF_ACTION_STOP_CHARGING = "action_stop_charging"
 CONF_ACTION_START_CHARGING = "action_start_charging"
 
+# Charger status sensor config key and expected state value
+CONF_CHARGER_STATUS_ENTITY = "charger_status_entity"
+CHARGING_STATE_VALUE = "Charging"
+
 # Unavailable behavior options
 UNAVAILABLE_BEHAVIOR_STOP = "stop"
 UNAVAILABLE_BEHAVIOR_IGNORE = "ignore"
