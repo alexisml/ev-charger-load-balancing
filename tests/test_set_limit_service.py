@@ -6,6 +6,8 @@ Tests cover:
 - ev_lb.set_limit stops charging when the requested value is below minimum EV current
 - ev_lb.set_limit triggers the appropriate action scripts (set_current, stop, resume)
 - ev_lb.set_limit override is one-shot — the next power meter event resumes automatic balancing
+- ev_lb.set_limit with entry_id targets only that instance; other instances are unaffected
+- ev_lb.set_limit without entry_id broadcasts to all instances
 - last_action_reason sensor reflects the correct reason for each type of update
 - ev_lb.set_limit service is unregistered when all entries are unloaded
 """
@@ -18,6 +20,9 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.ev_lb.const import (
+    CONF_MAX_SERVICE_CURRENT,
+    CONF_POWER_METER_ENTITY,
+    CONF_VOLTAGE,
     DOMAIN,
     REASON_FALLBACK_UNAVAILABLE,
     REASON_MANUAL_OVERRIDE,
@@ -379,3 +384,127 @@ class TestServiceLifecycle:
         await hass.async_block_till_done()
 
         assert not hass.services.has_service(DOMAIN, SERVICE_SET_LIMIT)
+
+
+# ---------------------------------------------------------------------------
+# ev_lb.set_limit — multi-instance independence
+# ---------------------------------------------------------------------------
+
+
+class TestSetLimitMultiInstance:
+    """Instances are independent: set_limit targets only the specified entry."""
+
+    async def test_set_limit_with_entry_id_does_not_affect_other_instance(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Calling set_limit with an entry_id leaves other instances untouched.
+
+        With two independent load-balancing instances (e.g. garage and house),
+        a manual override on one should have no effect on the other.
+        """
+        second_meter = "sensor.garage_power_w"
+
+        entry_a = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+            },
+            title="EV Load Balancing (sensor.house_power_w)",
+            unique_id=POWER_METER,
+        )
+        entry_b = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: second_meter,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 16.0,
+            },
+            title="EV Load Balancing (sensor.garage_power_w)",
+            unique_id=second_meter,
+        )
+
+        hass.states.async_set(POWER_METER, "0")
+        entry_a.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry_a.entry_id)
+        await hass.async_block_till_done()
+
+        hass.states.async_set(second_meter, "0")
+        entry_b.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry_b.entry_id)
+        await hass.async_block_till_done()
+
+        # Override only entry_a
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SET_LIMIT,
+            {"current_a": 20.0, "entry_id": entry_a.entry_id},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        current_a_id = get_entity_id(hass, entry_a, "sensor", "current_set")
+        current_b_id = get_entity_id(hass, entry_b, "sensor", "current_set")
+
+        assert float(hass.states.get(current_a_id).state) == 20.0
+        assert float(hass.states.get(current_b_id).state) == 0.0
+
+    async def test_set_limit_without_entry_id_broadcasts_to_all_instances(
+        self,
+        hass: HomeAssistant,
+    ) -> None:
+        """Calling set_limit without entry_id applies the override to all instances.
+
+        When entry_id is omitted, the service behaves as a broadcast so users
+        with a single-instance setup (or who want to limit all chargers at once)
+        do not need to specify an entry.
+        """
+        second_meter = "sensor.garage_power_w"
+
+        entry_a = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+            },
+            title="EV Load Balancing (sensor.house_power_w)",
+            unique_id=POWER_METER,
+        )
+        entry_b = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: second_meter,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 16.0,
+            },
+            title="EV Load Balancing (sensor.garage_power_w)",
+            unique_id=second_meter,
+        )
+
+        hass.states.async_set(POWER_METER, "0")
+        entry_a.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry_a.entry_id)
+        await hass.async_block_till_done()
+
+        hass.states.async_set(second_meter, "0")
+        entry_b.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry_b.entry_id)
+        await hass.async_block_till_done()
+
+        # No entry_id — should broadcast
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SET_LIMIT,
+            {"current_a": 10.0},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        current_a_id = get_entity_id(hass, entry_a, "sensor", "current_set")
+        current_b_id = get_entity_id(hass, entry_b, "sensor", "current_set")
+
+        assert float(hass.states.get(current_a_id).state) == 10.0
+        assert float(hass.states.get(current_b_id).state) == 10.0
