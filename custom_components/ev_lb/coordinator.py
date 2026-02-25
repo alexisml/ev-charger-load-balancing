@@ -60,15 +60,18 @@ from .const import (
     REASON_POWER_METER_UPDATE,
     SAFETY_MAX_POWER_METER_W,
     SIGNAL_UPDATE_FMT,
-    STATE_ACTIVE,
-    STATE_ADJUSTING,
     STATE_DISABLED,
-    STATE_RAMP_UP_HOLD,
     STATE_STOPPED,
-    UNAVAILABLE_BEHAVIOR_IGNORE,
-    UNAVAILABLE_BEHAVIOR_SET_CURRENT,
 )
-from .load_balancer import apply_ramp_up_limit, clamp_current, compute_target_current
+from .load_balancer import (
+    apply_ramp_up_limit,
+    clamp_current,
+    clamp_to_safe_output,
+    compute_fallback_reapply,
+    compute_target_current,
+    resolve_balancer_state,
+    resolve_fallback_current,
+)
 from ._log import get_logger
 
 _LOGGER = get_logger(__name__)
@@ -393,16 +396,13 @@ class EvLoadBalancerCoordinator:
         - **ignore**: re-clamps ``current_set_a`` to the new charger limits
           and updates if the value has changed.
         """
-        if self._unavailable_behavior == UNAVAILABLE_BEHAVIOR_SET_CURRENT:
-            target = min(self._unavailable_fallback_a, self.max_charger_current)
-        elif self._unavailable_behavior == UNAVAILABLE_BEHAVIOR_IGNORE:
-            clamped = clamp_current(
-                self.current_set_a, self.max_charger_current, self.min_ev_current
-            )
-            target = 0.0 if clamped is None else clamped
-        else:
-            # UNAVAILABLE_BEHAVIOR_STOP: stop charging
-            target = 0.0
+        target = compute_fallback_reapply(
+            self._unavailable_behavior,
+            self._unavailable_fallback_a,
+            self.max_charger_current,
+            self.current_set_a,
+            self.min_ev_current,
+        )
 
         if target != self.current_set_a:
             _LOGGER.debug(
@@ -438,34 +438,32 @@ class EvLoadBalancerCoordinator:
         ``0.0`` for stop mode, or the configured fallback capped at the
         charger maximum for set-current mode.
         """
-        behavior = self._unavailable_behavior
-
-        if behavior == UNAVAILABLE_BEHAVIOR_IGNORE:
+        result = resolve_fallback_current(
+            self._unavailable_behavior,
+            self._unavailable_fallback_a,
+            self.max_charger_current,
+        )
+        if result is None:
             _LOGGER.debug(
                 "Power meter %s is unavailable — ignoring (keeping last value %.1f A)",
                 self._power_meter_entity,
                 self.current_set_a,
             )
-            return None
-
-        if behavior == UNAVAILABLE_BEHAVIOR_SET_CURRENT:
-            fallback = min(self._unavailable_fallback_a, self.max_charger_current)
+        elif result == 0.0:
+            _LOGGER.warning(
+                "Power meter %s is unavailable — stopping charging (0 A)",
+                self._power_meter_entity,
+            )
+        else:
             _LOGGER.warning(
                 "Power meter %s is unavailable — applying fallback current %.1f A "
                 "(configured %.1f A, capped to max charger current %.1f A)",
                 self._power_meter_entity,
-                fallback,
+                result,
                 self._unavailable_fallback_a,
                 self.max_charger_current,
             )
-            return fallback
-
-        # UNAVAILABLE_BEHAVIOR_STOP (or unrecognised value): stop charging as the safest default
-        _LOGGER.warning(
-            "Power meter %s is unavailable — stopping charging (0 A)",
-            self._power_meter_entity,
-        )
-        return 0.0
+        return result
 
     # ------------------------------------------------------------------
     # Core computation
@@ -644,18 +642,17 @@ class EvLoadBalancerCoordinator:
         the service or charger limits, even if upstream logic has a bug.
         """
         # Safety clamp: output must never exceed charger max or service limit
-        if current_a > 0:
-            safe_max = min(self.max_charger_current, self._max_service_current)
-            if current_a > safe_max:
-                _LOGGER.warning(
-                    "Safety clamp: computed %.1f A exceeds safe maximum %.1f A "
-                    "(charger_max=%.1f, service_max=%.1f) — clamping",
-                    current_a,
-                    safe_max,
-                    self.max_charger_current,
-                    self._max_service_current,
-                )
-                current_a = safe_max
+        clamped_a = clamp_to_safe_output(current_a, self.max_charger_current, self._max_service_current)
+        if clamped_a != current_a:
+            _LOGGER.warning(
+                "Safety clamp: computed %.1f A exceeds safe maximum %.1f A "
+                "(charger_max=%.1f, service_max=%.1f) — clamping",
+                current_a,
+                clamped_a,
+                self.max_charger_current,
+                self._max_service_current,
+            )
+            current_a = clamped_a
 
         prev_active = self.active
         prev_current = self.current_set_a
@@ -666,8 +663,8 @@ class EvLoadBalancerCoordinator:
         self.last_action_reason = reason
 
         # Determine balancer operational state
-        self.balancer_state = self._resolve_balancer_state(
-            prev_active, prev_current, ramp_up_held, reason,
+        self.balancer_state = resolve_balancer_state(
+            self.enabled, self.active, prev_active, prev_current, self.current_set_a, ramp_up_held,
         )
 
         # Log significant transitions at info level (low cadence)
@@ -687,34 +684,6 @@ class EvLoadBalancerCoordinator:
             )
 
         async_dispatcher_send(self.hass, self.signal_update)
-
-    def _resolve_balancer_state(
-        self,
-        prev_active: bool,
-        prev_current: float,
-        ramp_up_held: bool,
-        reason: str,
-    ) -> str:
-        """Determine the balancer's operational state for the diagnostic sensor.
-
-        Maps to the charger state transitions described in the README:
-        - **disabled**: load balancing switch is off
-        - **stopped**: charger target is 0 A
-        - **ramp_up_hold**: increase blocked by cooldown
-        - **adjusting**: current changed this cycle
-        - **active**: target current > 0 and unchanged (steady state)
-
-        Meter health and fallback status are tracked by separate sensors.
-        """
-        if not self.enabled:
-            return STATE_DISABLED
-        if not self.active:
-            return STATE_STOPPED
-        if ramp_up_held:
-            return STATE_RAMP_UP_HOLD
-        if self.current_set_a != prev_current or not prev_active:
-            return STATE_ADJUSTING
-        return STATE_ACTIVE
 
     # ------------------------------------------------------------------
     # Event notifications and persistent notifications
