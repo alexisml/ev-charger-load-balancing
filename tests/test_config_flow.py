@@ -4,7 +4,8 @@ Tests cover:
 - Successful config entry creation with valid inputs
 - Validation error when the power meter entity does not exist
 - Default values for voltage and service current
-- Single-instance protection (abort if already configured)
+- Per-meter duplicate protection (abort if the same meter is already configured)
+- Multiple instances allowed when different power meters are used
 - Power meter EntitySelector is restricted to power device-class sensors
 """
 
@@ -54,7 +55,7 @@ async def test_user_flow_success(hass: HomeAssistant) -> None:
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "EV Load Balancing"
+    assert result["title"] == "EV Load Balancing (sensor.house_power_w)"
     assert result["data"] == {
         CONF_POWER_METER_ENTITY: "sensor.house_power_w",
         CONF_VOLTAGE: 230.0,
@@ -107,7 +108,7 @@ async def test_user_flow_custom_values(hass: HomeAssistant) -> None:
 
 
 async def test_user_flow_already_configured(hass: HomeAssistant) -> None:
-    """Test config flow aborts when integration is already configured."""
+    """Test config flow aborts when an instance for the same power meter already exists."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -115,15 +116,66 @@ async def test_user_flow_already_configured(hass: HomeAssistant) -> None:
             CONF_VOLTAGE: 230.0,
             CONF_MAX_SERVICE_CURRENT: 32.0,
         },
-        unique_id=DOMAIN,
+        unique_id="sensor.house_power_w",
     )
     entry.add_to_hass(hass)
+
+    hass.states.async_set("sensor.house_power_w", "3000")
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
+    assert result["type"] is FlowResultType.FORM
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_POWER_METER_ENTITY: "sensor.house_power_w",
+            CONF_VOLTAGE: 230.0,
+            CONF_MAX_SERVICE_CURRENT: 32.0,
+        },
+    )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_user_flow_second_instance_different_meter(hass: HomeAssistant) -> None:
+    """Test that a second instance can be created for a different power meter.
+
+    Users with multiple circuits (e.g. a garage and a house meter) should be
+    able to add a separate load-balancing instance for each circuit.
+    """
+    hass.states.async_set("sensor.house_power_w", "3000")
+    hass.states.async_set("sensor.garage_power_w", "1500")
+
+    # Set up the first instance
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_POWER_METER_ENTITY: "sensor.house_power_w",
+            CONF_VOLTAGE: 230.0,
+            CONF_MAX_SERVICE_CURRENT: 32.0,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    # A second instance for a different meter should be allowed
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_POWER_METER_ENTITY: "sensor.garage_power_w",
+            CONF_VOLTAGE: 230.0,
+            CONF_MAX_SERVICE_CURRENT: 16.0,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "EV Load Balancing (sensor.garage_power_w)"
 
 
 async def test_power_meter_selector_filters_by_power_device_class(hass: HomeAssistant) -> None:

@@ -14,6 +14,7 @@ _LOGGER = get_logger(__name__)
 SERVICE_SET_LIMIT_SCHEMA = vol.Schema(
     {
         vol.Required("current_a"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+        vol.Optional("entry_id"): str,
     }
 )
 
@@ -51,19 +52,35 @@ def _register_services(hass: HomeAssistant) -> None:
     def handle_set_limit(call: ServiceCall) -> None:
         """Handle ev_lb.set_limit service call.
 
-        Applies the requested current to every loaded coordinator.
-        In the current single-charger architecture there is exactly one.
+        When ``entry_id`` is provided the override is applied only to the
+        coordinator for that config entry, keeping instances independent.
+        When omitted the override is broadcast to every loaded coordinator.
         """
         current_a = call.data["current_a"]
+        target_entry_id: str | None = call.data.get("entry_id")
         _LOGGER.debug(
-            "Service %s.%s called with current_a=%.1f",
+            "Service %s.%s called with current_a=%.1f entry_id=%s",
             DOMAIN,
             SERVICE_SET_LIMIT,
             current_a,
+            target_entry_id,
         )
-        for entry_data in hass.data[DOMAIN].values():
+        if target_entry_id is not None:
+            entry_data = hass.data[DOMAIN].get(target_entry_id)
+            if entry_data is None:
+                _LOGGER.warning(
+                    "Service %s.%s: entry_id '%s' not found",
+                    DOMAIN,
+                    SERVICE_SET_LIMIT,
+                    target_entry_id,
+                )
+                return
             coordinator: EvLoadBalancerCoordinator = entry_data["coordinator"]
             coordinator.manual_set_limit(current_a)
+        else:
+            for entry_data in hass.data[DOMAIN].values():
+                coordinator = entry_data["coordinator"]
+                coordinator.manual_set_limit(current_a)
 
     hass.services.async_register(
         DOMAIN,

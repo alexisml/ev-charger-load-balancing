@@ -78,7 +78,7 @@ _LOGGER = get_logger(__name__)
 
 
 class EvLoadBalancerCoordinator:
-    """Coordinate power-meter events and single-charger balancing logic.
+    """Coordinate power-meter events and EV charger balancing logic.
 
     Listens for power-meter state changes, computes the target charging
     current, applies the ramp-up cooldown, and publishes the result via
@@ -571,7 +571,7 @@ class EvLoadBalancerCoordinator:
         self._recompute(service_power_w)
 
     def _recompute(self, service_power_w: float, reason: str = REASON_POWER_METER_UPDATE) -> None:
-        """Run the single-charger balancing algorithm and publish updates."""
+        """Run the balancing algorithm for this instance and publish updates."""
         service_current_a = service_power_w / self._voltage
         # When we know the EV is not actively charging, do not subtract its
         # last commanded current from the available headroom estimate.

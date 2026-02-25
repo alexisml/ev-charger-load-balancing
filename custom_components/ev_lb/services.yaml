@@ -4,7 +4,8 @@ set_limit:
     Manually override the charger current limit. The value is clamped to the
     charger's min/max range. If it falls below the minimum EV current, charging
     is stopped. The override is one-shot — the next power-meter event resumes
-    automatic balancing.
+    automatic balancing. When multiple instances are configured, provide
+    entry_id to target a specific instance; omit it to apply to all instances.
   fields:
     current_a:
       name: Current (A)
@@ -18,3 +19,13 @@ set_limit:
           step: 1
           unit_of_measurement: A
           mode: box
+    entry_id:
+      name: Config entry ID
+      description: >-
+        Optional. The config entry ID of the load balancer instance to target
+        (found under Settings → Devices & services → EV Load Balancing →
+        entry details). When omitted, the override is applied to all instances.
+      required: false
+      example: "abc123def456"
+      selector:
+        text:
