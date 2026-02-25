@@ -66,12 +66,6 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Handle the initial step."""
-        # Single-instance protection: only one config entry is allowed.
-        # Multi-charger and multi-instance support are planned for a future PR
-        # (see docs/development-memories/2026-02-19-research-plan.md).
-        await self.async_set_unique_id(DOMAIN)
-        self._abort_if_unique_id_configured()
-
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -84,6 +78,12 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
                     "Config flow: entity %s not found", entity_id,
                 )
             else:
+                # Use the power meter entity as unique ID so the same meter
+                # cannot be configured twice, while still allowing multiple
+                # independent instances for different circuits/meters.
+                await self.async_set_unique_id(entity_id)
+                self._abort_if_unique_id_configured()
+
                 # Validation passed — create the config entry
                 _LOGGER.debug(
                     "Config flow: creating entry (meter=%s, voltage=%.0f V, service=%.0f A)",
@@ -92,7 +92,7 @@ class EvLbConfigFlow(ConfigFlow, domain=DOMAIN):  # pyright: ignore[reportGenera
                     user_input.get(CONF_MAX_SERVICE_CURRENT, DEFAULT_MAX_SERVICE_CURRENT),
                 )
                 return self.async_create_entry(
-                    title="EV Load Balancing",
+                    title=f"EV Load Balancing ({entity_id})",
                     data=user_input,
                 )
 
