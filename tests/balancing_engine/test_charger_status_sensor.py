@@ -166,3 +166,45 @@ class TestChargerStatusSensor:
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         assert coordinator._charger_status_entity == status_entity
         assert coordinator._is_ev_charging() is False
+
+    async def test_unavailable_sensor_falls_back_to_charging_assumption(
+        self, hass: HomeAssistant
+    ) -> None:
+        """An unavailable or unknown sensor state is treated as 'charging' to stay safe.
+
+        If the OCPP integration goes offline and the sensor becomes 'unavailable'
+        or 'unknown', the balancer must not zero out the EV estimate.  Zeroing it
+        would over-report available headroom and could send a dangerously high
+        current command to the charger.  The safe fallback is to keep assuming
+        the EV is drawing its last commanded current.
+        """
+        status_entity = "sensor.ocpp_status"
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+                CONF_CHARGER_STATUS_ENTITY: status_entity,
+            },
+            title="EV Load Balancing",
+        )
+        hass.states.async_set(POWER_METER, "0")
+        hass.states.async_set(status_entity, "Charging")
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+        # Sensor exists but goes unavailable
+        hass.states.async_set(status_entity, "unavailable")
+        assert coordinator._is_ev_charging() is True
+
+        # Sensor exists but state is unknown
+        hass.states.async_set(status_entity, "unknown")
+        assert coordinator._is_ev_charging() is True
+
+        # Sensor entity removed from state machine entirely
+        hass.states.async_remove(status_entity)
+        assert coordinator._is_ev_charging() is True

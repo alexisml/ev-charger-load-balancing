@@ -481,8 +481,8 @@ class EvLoadBalancerCoordinator:
         if self._charger_status_entity is None:
             return True  # No sensor configured; assume charging when current > 0
         state = self.hass.states.get(self._charger_status_entity)
-        if state is None:
-            return True  # Unknown state; assume charging to be safe
+        if state is None or state.state in ("unavailable", "unknown"):
+            return True  # Sensor unavailable; safe fallback — assume charging
         return state.state == CHARGING_STATE_VALUE
 
     # ------------------------------------------------------------------
@@ -616,7 +616,7 @@ class EvLoadBalancerCoordinator:
             )
 
         # Determine balancer operational state
-        ramp_up_held = final_a != target_a and final_a < target_a
+        ramp_up_held = final_a < target_a
 
         # Update computed state and execute actions
         self._update_and_notify(round(available_a, 2), final_a, reason, ramp_up_held)
