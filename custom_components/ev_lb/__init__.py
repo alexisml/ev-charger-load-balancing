@@ -52,7 +52,8 @@ def _register_services(hass: HomeAssistant) -> None:
         """Handle ev_lb.set_limit service call.
 
         Applies the requested current to every loaded coordinator.
-        In the current single-charger architecture there is exactly one.
+        When multiple instances are configured, the override is broadcast
+        to all of them simultaneously.
         """
         current_a = call.data["current_a"]
         _LOGGER.debug(

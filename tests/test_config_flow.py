@@ -4,7 +4,8 @@ Tests cover:
 - Successful config entry creation with valid inputs
 - Validation error when the power meter entity does not exist
 - Default values for voltage and service current
-- Single-instance protection (abort if already configured)
+- Per-meter duplicate protection (abort if the same meter is already configured)
+- Multiple instances allowed when different power meters are used
 - Power meter EntitySelector is restricted to power device-class sensors
 """
 
