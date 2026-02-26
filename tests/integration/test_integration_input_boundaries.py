@@ -40,15 +40,16 @@ from conftest import (
 
 
 class TestMaxChargerCurrentBoundaries:
-    """Boundary tests for the max_charger_current number entity (1–80 A).
+    """Boundary tests for the max_charger_current number entity (0–80 A).
 
-    Validates behavior at exact limits, one above, one below, and zero/negative.
+    Validates behavior at exact limits and the special 0 A case that stops
+    charging immediately without running the load-balancing algorithm.
     """
 
-    async def test_set_exactly_at_minimum_limit(
+    async def test_set_exactly_at_minimum_limit_stops_charging(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Setting max charger current to exactly 1 A (minimum) is accepted and caps charging."""
+        """Setting max charger current to exactly 0 A (minimum) stops charging immediately."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         coordinator.ramp_up_time_s = 0.0
@@ -61,7 +62,7 @@ class TestMaxChargerCurrentBoundaries:
         await hass.async_block_till_done()
         assert float(hass.states.get(current_set_id).state) == 18.0
 
-        # Set max to exactly MIN_CHARGER_CURRENT (1 A)
+        # Set max to exactly MIN_CHARGER_CURRENT (0 A) — load balancing bypassed, charging stops
         await hass.services.async_call(
             "number", "set_value",
             {"entity_id": max_id, "value": MIN_CHARGER_CURRENT},
@@ -69,7 +70,32 @@ class TestMaxChargerCurrentBoundaries:
         )
         await hass.async_block_till_done()
 
-        # current should be capped, but 1 A < min_ev (6 A) → stop
+        assert float(hass.states.get(current_set_id).state) == 0.0
+
+    async def test_set_to_one_amp_still_stops_below_min_ev(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Setting max charger current to 1 A allows load balancing to run, but charging stops because 1 A is below the minimum EV current of 6 A."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        coordinator.ramp_up_time_s = 0.0
+
+        max_id = get_entity_id(hass, mock_config_entry, "number", "max_charger_current")
+        current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
+
+        # Start charging at 18 A
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+        assert float(hass.states.get(current_set_id).state) == 18.0
+
+        # Set max to 1 A — 1 A < min_ev (6 A) → load balancer stops charging
+        await hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": max_id, "value": 1.0},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
         assert float(hass.states.get(current_set_id).state) == 0.0
 
     async def test_set_exactly_at_maximum_limit(
@@ -108,6 +134,34 @@ class TestMaxChargerCurrentBoundaries:
                 {"entity_id": max_id, "value": MAX_CHARGER_CURRENT + 1},
                 blocking=True,
             )
+
+    async def test_max_zero_bypasses_load_balancing_on_meter_update(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """When max charger current is 0, subsequent power meter updates also output 0 A."""
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        coordinator.ramp_up_time_s = 0.0
+
+        max_id = get_entity_id(hass, mock_config_entry, "number", "max_charger_current")
+        current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
+
+        # Set max to 0 A
+        await hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": max_id, "value": 0.0},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        # Even with zero house load (which would normally allow full charging),
+        # the output must stay 0 A because max charger current is 0
+        hass.states.async_set(POWER_METER, "0")
+        await hass.async_block_till_done()
+
+        assert float(hass.states.get(current_set_id).state) == 0.0
+        assert coordinator.current_set_a == 0.0
+        assert coordinator.current_set_w == 0.0
 
 
 class TestMinEvCurrentBoundaries:

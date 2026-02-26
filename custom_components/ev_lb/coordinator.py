@@ -575,6 +575,11 @@ class EvLoadBalancerCoordinator:
 
     def _recompute(self, service_power_w: float, reason: str = REASON_POWER_METER_UPDATE) -> None:
         """Run the balancing algorithm for this instance and publish updates."""
+        if self.max_charger_current == 0.0:
+            _LOGGER.debug("Max charger current is 0 A — skipping load balancing, outputting 0 A")
+            self._update_and_notify(0.0, 0.0, reason)
+            return
+
         service_current_a = service_power_w / self._voltage
         # When we know the EV is not actively charging, do not subtract its
         # last commanded current from the available headroom estimate.
