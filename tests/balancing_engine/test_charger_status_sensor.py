@@ -10,6 +10,11 @@ Covers:
 - Available headroom correctly accounts for EV draw when sensor = Charging
 - Behaviour is unchanged when no status sensor is configured
 - Status sensor set via the options flow is honoured by the coordinator
+- EV throttling (battery near full) does not lock coordinator at max amps
+- ev_charging diagnostic sensor reflects charger status changes
+- ev_charging sensor stays on when status sensor is unavailable/unknown
+- ev_charging sensor is always on when no status sensor is configured
+- coordinator.ev_charging attribute is updated correctly on each recompute
 """
 
 from homeassistant.core import HomeAssistant
@@ -208,3 +213,206 @@ class TestChargerStatusSensor:
         # Sensor entity removed from state machine entirely
         hass.states.async_remove(status_entity)
         assert coordinator._is_ev_charging() is True
+
+
+class TestThrottledEvFix:
+    """Verify the coordinator does not get stuck at max amps when the EV draws less than commanded.
+
+    When an EV throttles its own charging rate (e.g. battery near full) or stops
+    drawing current entirely, the total service draw reported by the power meter
+    falls below the last commanded charger current.  Without a fix the formula
+    would attribute zero load to non-EV devices and always report full headroom,
+    causing the coordinator to command the maximum current indefinitely.
+
+    The fix: when total service draw < commanded EV current, treat all measured
+    load as non-EV (conservative safe estimate) rather than over-allocating headroom.
+    """
+
+    async def test_coordinator_reduces_current_when_ev_throttles(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Charger current drops when the EV draws less than commanded due to battery throttling.
+
+        Without the fix the coordinator would see service < commanded → non_ev=0 →
+        available=max → keep commanding max forever.  With the fix it treats all
+        measured load as non-EV and produces a realistic available-current estimate.
+        """
+        await setup_integration(hass, mock_config_entry)
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        coordinator.ramp_up_time_s = 0.0
+
+        current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
+        available_id = get_entity_id(hass, mock_config_entry, "sensor", "available_current")
+
+        # Phase 1: EV starts charging with 5 A house load, meter = (5+20)*230 = 5750 W
+        # service=25 A, ev_estimate=0 (EV not yet drawing), non_ev=25, available=7 → 7 A
+        hass.states.async_set(POWER_METER, "5750")
+        await hass.async_block_till_done()
+        assert float(hass.states.get(current_set_id).state) == 7.0
+
+        # Phase 2: EV draws its full 7 A, house 5 A, total = (5+7)*230 = 2760 W
+        # service=12 A, ev_estimate=7 A (12 > 7 → normal formula)
+        # non_ev=5 A, available=27, target=27 A (increase, no prior reduction)
+        hass.states.async_set(POWER_METER, "2760")
+        await hass.async_block_till_done()
+        assert float(hass.states.get(current_set_id).state) == 27.0
+
+        # Phase 3: EV throttles to 10 A (battery near full), house still 5 A,
+        # total meter = (5+10)*230 = 3450 W → service=15 A < commanded 27 A.
+        # Without fix: non_ev=0, available=32 A (WRONG — stuck at max).
+        # With fix: service < commanded → ev_estimate=0, non_ev=15, available=17 → 17 A.
+        hass.states.async_set(POWER_METER, "3450")
+        await hass.async_block_till_done()
+        assert float(hass.states.get(current_set_id).state) == 17.0
+        assert float(hass.states.get(available_id).state) == 17.0
+
+    async def test_ev_charging_sensor_reflects_charger_status_changes(
+        self, hass: HomeAssistant
+    ) -> None:
+        """EV charging diagnostic sensor turns off when the charger status sensor reports not-charging.
+
+        The ev_charging diagnostic sensor tracks the coordinator's detection of whether the EV
+        is actively drawing current.  It switches off when the charger status sensor
+        indicates the EV is idle or finished, allowing operators to verify the
+        status sensor is working correctly.
+        """
+        status_entity = "sensor.ocpp_status"
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+                CONF_CHARGER_STATUS_ENTITY: status_entity,
+            },
+            title="EV Load Balancing",
+        )
+        hass.states.async_set(POWER_METER, "0")
+        hass.states.async_set(status_entity, "Charging")
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        ev_charging_id = get_entity_id(hass, entry, "binary_sensor", "ev_charging")
+
+        # Trigger a recompute so ev_charging is set from the status sensor
+        hass.states.async_set(POWER_METER, "1000")
+        await hass.async_block_till_done()
+        assert hass.states.get(ev_charging_id).state == "on"
+
+        # EV finishes charging → status changes to "Available"
+        hass.states.async_set(status_entity, "Available")
+        hass.states.async_set(POWER_METER, "1001")
+        await hass.async_block_till_done()
+        assert hass.states.get(ev_charging_id).state == "off"
+
+        # EV reconnects and starts charging again
+        hass.states.async_set(status_entity, "Charging")
+        hass.states.async_set(POWER_METER, "1002")
+        await hass.async_block_till_done()
+        assert hass.states.get(ev_charging_id).state == "on"
+
+    async def test_ev_treated_as_charging_when_status_sensor_unavailable(
+        self, hass: HomeAssistant
+    ) -> None:
+        """EV charging diagnostic sensor stays on when the status sensor becomes unavailable.
+
+        When the OCPP integration goes offline (sensor state = 'unavailable' or
+        'unknown'), the coordinator conservatively treats the EV as still drawing
+        current.  The ev_charging sensor must reflect this: it stays on so the
+        operator sees the safe assumption rather than a misleading off state.
+        """
+        status_entity = "sensor.ocpp_status"
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+                CONF_CHARGER_STATUS_ENTITY: status_entity,
+            },
+            title="EV Load Balancing",
+        )
+        hass.states.async_set(POWER_METER, "0")
+        hass.states.async_set(status_entity, "Charging")
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        ev_charging_id = get_entity_id(hass, entry, "binary_sensor", "ev_charging")
+
+        # Baseline: sensor = Charging → ev_charging on
+        hass.states.async_set(POWER_METER, "1000")
+        await hass.async_block_till_done()
+        assert hass.states.get(ev_charging_id).state == "on"
+
+        # Status sensor goes unavailable → coordinator falls back to assuming charging
+        hass.states.async_set(status_entity, "unavailable")
+        hass.states.async_set(POWER_METER, "1001")
+        await hass.async_block_till_done()
+        assert hass.states.get(ev_charging_id).state == "on"
+
+        # Status sensor goes unknown → same safe assumption
+        hass.states.async_set(status_entity, "unknown")
+        hass.states.async_set(POWER_METER, "1002")
+        await hass.async_block_till_done()
+        assert hass.states.get(ev_charging_id).state == "on"
+
+    async def test_ev_treated_as_charging_when_no_status_sensor_configured(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """EV charging sensor stays on throughout when no status sensor is configured.
+
+        Without a status sensor the coordinator always treats the EV as drawing
+        current, so the ev_charging diagnostic sensor must report on at every
+        meter update.
+        """
+        await setup_integration(hass, mock_config_entry)
+
+        ev_charging_id = get_entity_id(
+            hass, mock_config_entry, "binary_sensor", "ev_charging"
+        )
+
+        # Multiple meter updates — ev_charging must stay on since there is no sensor
+        for power_w in ("1000", "5000", "7360"):
+            hass.states.async_set(POWER_METER, power_w)
+            await hass.async_block_till_done()
+            assert hass.states.get(ev_charging_id).state == "on"
+
+    async def test_coordinator_reports_ev_not_charging_after_status_change(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Coordinator ev_charging attribute is False after a meter event with non-charging status.
+
+        Verifies the coordinator property (not just the sensor) is written correctly
+        on each recompute — this attribute is the source of truth for the binary sensor.
+        """
+        status_entity = "sensor.ocpp_status"
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_POWER_METER_ENTITY: POWER_METER,
+                CONF_VOLTAGE: 230.0,
+                CONF_MAX_SERVICE_CURRENT: 32.0,
+                CONF_CHARGER_STATUS_ENTITY: status_entity,
+            },
+            title="EV Load Balancing",
+        )
+        hass.states.async_set(POWER_METER, "0")
+        hass.states.async_set(status_entity, "Charging")
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+        # Meter event while sensor = Charging → ev_charging True
+        hass.states.async_set(POWER_METER, "2000")
+        await hass.async_block_till_done()
+        assert coordinator.ev_charging is True
+
+        # Sensor changes to non-charging state, meter fires → ev_charging False
+        hass.states.async_set(status_entity, "Available")
+        hass.states.async_set(POWER_METER, "2001")
+        await hass.async_block_till_done()
+        assert coordinator.ev_charging is False

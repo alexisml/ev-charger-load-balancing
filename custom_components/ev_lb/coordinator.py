@@ -124,6 +124,7 @@ class EvLoadBalancerCoordinator:
         self.meter_healthy: bool = True
         self.fallback_active: bool = False
         self.configured_fallback: str = self._unavailable_behavior
+        self.ev_charging: bool = True
 
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None
@@ -577,7 +578,17 @@ class EvLoadBalancerCoordinator:
         service_current_a = service_power_w / self._voltage
         # When we know the EV is not actively charging, do not subtract its
         # last commanded current from the available headroom estimate.
-        ev_current_estimate = self.current_set_a if self._is_ev_charging() else 0.0
+        self.ev_charging = self._is_ev_charging()
+        ev_current_estimate = self.current_set_a if self.ev_charging else 0.0
+        # When the total service draw is less than the commanded EV current the EV
+        # must be drawing less than we asked (e.g. battery throttling near 100 %).
+        # Subtracting a larger commanded value than the actual draw would produce a
+        # negative non-EV load that gets clamped to zero, making available_a jump to
+        # the service maximum and causing the coordinator to keep commanding max amps
+        # indefinitely.  Use 0 as the EV estimate in this case so that all measured
+        # load is treated as non-EV — a conservative, safe lower bound on headroom.
+        if service_current_a < ev_current_estimate:
+            ev_current_estimate = 0.0
         available_a, clamped = compute_target_current(
             service_current_a,
             ev_current_estimate,

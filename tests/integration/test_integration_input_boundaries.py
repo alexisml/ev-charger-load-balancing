@@ -150,7 +150,11 @@ class TestMinEvCurrentBoundaries:
     async def test_set_exactly_at_maximum_limit(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Setting min EV current to exactly 32 A (maximum) stops charging when headroom is insufficient."""
+        """Boundary case where min_ev_current equals max_charger_current (32 A).
+
+        Charges at 32 A with no house load; stops when additional load pushes
+        available current below the minimum.
+        """
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         coordinator.ramp_up_time_s = 0.0
@@ -159,13 +163,8 @@ class TestMinEvCurrentBoundaries:
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
         active_id = get_entity_id(hass, mock_config_entry, "binary_sensor", "active")
 
-        # Charge at moderate load: 3000 W → 18 A
-        hass.states.async_set(POWER_METER, "3000")
-        await hass.async_block_till_done()
-        assert float(hass.states.get(current_set_id).state) == 18.0
-
-        # Set min to 32 A → recompute: raw_target = 18 + 18.96 = 36.96,
-        # clamped to min(36.96, 32) = 32, floored = 32, 32 ≥ 32 → charge at 32 A
+        # Set min to 32 A: meter is already at 0 W from setup, triggering async_recompute_from_current_state.
+        # service=0 A, ev_estimate=0 (current_set=0), non_ev=0, available=32 A ≥ min_ev=32 A → charge at 32 A
         await hass.services.async_call(
             "number", "set_value",
             {"entity_id": min_id, "value": MIN_EV_CURRENT_MAX},
@@ -174,8 +173,8 @@ class TestMinEvCurrentBoundaries:
         await hass.async_block_till_done()
         assert float(hass.states.get(current_set_id).state) == 32.0
 
-        # Now increase load to 8000 W → available = 32 - 34.78 = -2.78
-        # raw_target = 32 + (-2.78) = 29.22, clamped = 29, 29 < 32 → stop
+        # Increase load to 8000 W → service=34.78 A > current_set=32 A → non_ev=2.78 A,
+        # available=29.22 A → floor=29 A < min_ev=32 A → stop
         hass.states.async_set(POWER_METER, "8000")
         await hass.async_block_till_done()
 

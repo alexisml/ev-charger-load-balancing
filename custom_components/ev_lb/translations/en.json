@@ -92,7 +92,10 @@
         "name": "Power meter status"
       },
       "fallback_active": {
-        "name": "Meter fallback active"
+        "name": "Power meter fallback"
+      },
+      "ev_charging": {
+        "name": "EV charging"
       }
     },
     "number": {

@@ -89,15 +89,14 @@ class TestNormalDailyOperation:
         assert calls[1].data["entity_id"] == SET_CURRENT_SCRIPT
         assert calls[1].data["variables"]["current_a"] == 27.0
 
-        # --- Phase 2: Moderate load increase → charger adjusts down instantly ---
+        # --- Phase 2: EV draws its full commanded 27 A, no house load → increase to max ---
         calls.clear()
         mock_time = 1001.0
-        # 5000 W at 230 V → draw ~21.7 A → headroom = 32 - 21.7 = 10.3 A
-        # raw_target = current_set (27) + available (10.3) = 37.3
-        # service_current - house_power_w / voltage = 32 - 5000/230 = 32 - 21.74 = 10.26
-        # raw_target = 27 + 10.26 = 37.26 → capped at 32 A → increase from 27 → 32 A
-        # No reduction has occurred yet, so ramp-up is not triggered.
-        hass.states.async_set(POWER_METER, "5000")
+        # EV draws 27 A at 230 V = 6210 W, no house load → service = 27 A
+        # ev_estimate = 27 A (commanded == service → no conservative override)
+        # non_ev = 0, available = 32 A → capped at max_charger=32 A → increase 27 → 32 A
+        # No reduction recorded yet, so ramp-up is not triggered.
+        hass.states.async_set(POWER_METER, "6210")
         await hass.async_block_till_done()
 
         assert float(hass.states.get(current_set_id).state) == 32.0
