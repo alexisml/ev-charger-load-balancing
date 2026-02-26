@@ -174,6 +174,7 @@ class EvLbEvChargingBinarySensor(BinarySensorEntity, RestoreEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "ev_charging"
+    _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_is_on = True
 
