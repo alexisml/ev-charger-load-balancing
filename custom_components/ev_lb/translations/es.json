@@ -92,7 +92,10 @@
         "name": "Estado del medidor"
       },
       "fallback_active": {
-        "name": "Respaldo de medidor activo"
+        "name": "Respaldo del medidor"
+      },
+      "ev_charging": {
+        "name": "VE cargando"
       }
     },
     "number": {

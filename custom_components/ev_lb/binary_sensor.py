@@ -31,6 +31,7 @@ async def async_setup_entry(
             EvLbActiveBinarySensor(entry, coordinator),
             EvLbMeterStatusBinarySensor(entry, coordinator),
             EvLbFallbackActiveBinarySensor(entry, coordinator),
+            EvLbEvChargingBinarySensor(entry, coordinator),
         ]
     )
 
@@ -158,4 +159,51 @@ class EvLbFallbackActiveBinarySensor(BinarySensorEntity, RestoreEntity):
     def _handle_update(self) -> None:
         """Update binary sensor state from coordinator."""
         self._attr_is_on = self._coordinator.fallback_active
+        self.async_write_ha_state()
+
+
+class EvLbEvChargingBinarySensor(BinarySensorEntity, RestoreEntity):
+    """Diagnostic binary sensor showing whether the coordinator detects the EV as actively charging.
+
+    On means the coordinator believes the EV is drawing current (either because
+    no charger-status sensor is configured, or the sensor reports 'Charging').
+    Off means the coordinator detected that the EV is not charging and zeroed
+    out its current estimate accordingly.  Useful for verifying that the
+    charger-status sensor is working correctly.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "ev_charging"
+    _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_is_on = True
+
+    def __init__(
+        self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
+    ) -> None:
+        """Initialise the binary sensor."""
+        self._attr_unique_id = f"{entry.entry_id}_ev_charging"
+        self._attr_device_info = get_device_info(entry)
+        self._coordinator = coordinator
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last known value and subscribe to coordinator updates."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last and last.state is not None:
+            self._attr_is_on = last.state == "on"
+        else:
+            self._attr_is_on = self._coordinator.ev_charging
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._coordinator.signal_update,
+                self._handle_update,
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        """Update binary sensor state from coordinator."""
+        self._attr_is_on = self._coordinator.ev_charging
         self.async_write_ha_state()
