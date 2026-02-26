@@ -423,7 +423,8 @@ class TestMaxChargerZeroStopAndResumeCycle:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Charging stops when max is 0, meter events are ignored while stopped, and charging resumes when max is restored."""
+        """Charging stops when max is 0, meter events are ignored while stopped,
+        and charging resumes when max is restored."""
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
         coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]

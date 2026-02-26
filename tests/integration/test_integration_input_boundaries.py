@@ -75,7 +75,8 @@ class TestMaxChargerCurrentBoundaries:
     async def test_set_to_one_amp_still_stops_below_min_ev(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Setting max charger current to 1 A allows load balancing to run, but charging stops because 1 A is below the minimum EV current of 6 A."""
+        """Setting max charger current to 1 A allows load balancing to run, but
+        charging stops because 1 A is below the minimum EV current of 6 A."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         coordinator.ramp_up_time_s = 0.0
