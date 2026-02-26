@@ -192,14 +192,23 @@ class EvLoadBalancerCoordinator:
 
         if self.hass.is_running:
             # Integration was loaded after HA finished starting (e.g., added
-            # via the UI).  Entity platforms are already fully set up and
-            # dispatcher connections are live, so meter health can be evaluated
-            # and the fallback applied synchronously right now.
+            # via the UI or reloaded after an options change).  Entity platforms
+            # are already fully set up and dispatcher connections are live.
             meter_state = self.hass.states.get(self._power_meter_entity)
             if meter_state is None or meter_state.state in ("unavailable", "unknown"):
                 self.meter_healthy = False
                 self.fallback_active = True
                 self._apply_fallback_current()
+            else:
+                # Meter is healthy.  Schedule a deferred initial recompute so
+                # that entity async_added_to_hass handlers (which restore
+                # current_set_a from storage) execute before we compute.  The
+                # guard inside the task prevents unnecessary computation on a
+                # fresh install where current_set_a is still 0.
+                self.hass.async_create_task(
+                    self._async_initial_recompute(),
+                    eager_start=False,
+                )
         else:
             # HA is still loading — dependent integrations may not have
             # registered their entities yet, so a missing or unavailable meter
@@ -241,11 +250,37 @@ class EvLoadBalancerCoordinator:
             self.meter_healthy = False
             self.fallback_active = True
             self._apply_fallback_current()
+        else:
+            # Meter is healthy.  By the time EVENT_HOMEASSISTANT_STARTED fires
+            # all entity async_added_to_hass handlers have already run, so
+            # current_set_a is fully restored from storage.  Trigger an initial
+            # recompute so the charger is set correctly even when the meter has
+            # not changed value since the last HA restart (which would produce
+            # no STATE_CHANGED event).
+            self._force_recompute_from_meter()
+            self._update_overload_timers()
         _LOGGER.debug(
             "HA started — power meter %s is %s",
             self._power_meter_entity,
             "unavailable" if not self.meter_healthy else "healthy",
         )
+
+    async def _async_initial_recompute(self) -> None:
+        """Perform the first meter read after the integration loads at runtime.
+
+        Scheduled as a task from :meth:`async_start` so that entity
+        ``async_added_to_hass`` handlers — which restore ``current_set_a``
+        from storage — execute before the balancing algorithm runs.
+
+        Only triggers a real computation when there is a previous commanded
+        current to work from (``current_set_a > 0``).  Skipping the compute
+        on a fresh install (where ``current_set_a`` is still 0.0) avoids
+        spuriously commanding the charger to max current before the first
+        genuine power-meter event arrives.
+        """
+        if self.current_set_a > 0:
+            self._force_recompute_from_meter()
+            self._update_overload_timers()
 
     # ------------------------------------------------------------------
     # Event handler
