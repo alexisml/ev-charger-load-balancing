@@ -18,7 +18,9 @@ from custom_components.ev_lb.const import (
     REASON_PARAMETER_CHANGE,
     REASON_POWER_METER_UPDATE,
     SERVICE_SET_LIMIT,
+    STATE_ADJUSTING,
     STATE_DISABLED,
+    STATE_STOPPED,
 )
 from conftest import (
     POWER_METER,
@@ -400,3 +402,100 @@ class TestDisableDuringOverloadAndReenable:
         set_calls = [c for c in calls if c.data["entity_id"] == SET_CURRENT_SCRIPT]
         assert len(start_calls) >= 1
         assert len(set_calls) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Scenario: max charger current 0 → stop → resume cycle
+# ---------------------------------------------------------------------------
+
+
+class TestMaxChargerZeroStopAndResumeCycle:
+    """User sets max charger current to 0 to pause charging, then restores it.
+
+    Verifies the complete cycle: normal load-balanced charging → max set to
+    0 A (charging stops, load balancing bypassed) → meter events continue to
+    output 0 A while max is 0 → max restored to non-zero (load balancing
+    resumes and charging starts again).
+    """
+
+    async def test_balanced_then_zero_max_then_resume(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """Charging stops when max is 0, meter events are ignored while stopped,
+        and charging resumes when max is restored."""
+        calls = async_mock_service(hass, "script", "turn_on")
+        await setup_integration(hass, mock_config_entry_with_actions)
+        coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id]["coordinator"]
+        coordinator.ramp_up_time_s = 0.0  # Disable cooldown for clean transitions
+
+        current_set_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "current_set")
+        active_id = get_entity_id(hass, mock_config_entry_with_actions, "binary_sensor", "active")
+        max_id = get_entity_id(hass, mock_config_entry_with_actions, "number", "max_charger_current")
+        state_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "balancer_state")
+        reason_id = get_entity_id(hass, mock_config_entry_with_actions, "sensor", "last_action_reason")
+
+        # --- Phase 1: Normal load-balanced charging at 18 A ---
+        # 3000 W / 230 V = 13.04 A → available = 32 - 13.04 = 18.96 A → target = 18 A
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+
+        assert float(hass.states.get(current_set_id).state) == 18.0
+        assert hass.states.get(active_id).state == "on"
+        assert hass.states.get(state_id).state == STATE_ADJUSTING
+        assert hass.states.get(reason_id).state == REASON_POWER_METER_UPDATE
+
+        calls.clear()
+
+        # --- Phase 2: Set max charger current to 0 A → charging stops immediately ---
+        # The coordinator's early exit bypasses load balancing and outputs 0 A.
+        await hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": max_id, "value": 0.0},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        assert float(hass.states.get(current_set_id).state) == 0.0
+        assert hass.states.get(active_id).state == "off"
+        assert hass.states.get(state_id).state == STATE_STOPPED
+        assert hass.states.get(reason_id).state == REASON_PARAMETER_CHANGE
+
+        # stop_charging action fires for the transition to stopped
+        stop_calls = [c for c in calls if c.data["entity_id"] == STOP_CHARGING_SCRIPT]
+        assert len(stop_calls) >= 1
+
+        calls.clear()
+
+        # --- Phase 3: Meter event while max = 0 → load balancing bypassed, output stays 0 A ---
+        # Even with zero house load (full headroom), the output must remain 0 A.
+        hass.states.async_set(POWER_METER, "0")
+        await hass.async_block_till_done()
+
+        assert float(hass.states.get(current_set_id).state) == 0.0
+        assert hass.states.get(active_id).state == "off"
+        assert coordinator.current_set_w == 0.0
+        assert len(calls) == 0  # No charger actions while max = 0
+
+        # --- Phase 4: Restore max charger current to 32 A → charging resumes ---
+        # Coordinator recomputes from current meter value (0 W) → target = 32 A.
+        await hass.services.async_call(
+            "number", "set_value",
+            {"entity_id": max_id, "value": 32.0},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+        resumed_current = float(hass.states.get(current_set_id).state)
+        assert resumed_current > 0
+        assert hass.states.get(active_id).state == "on"
+        assert hass.states.get(state_id).state == STATE_ADJUSTING
+        assert hass.states.get(reason_id).state == REASON_PARAMETER_CHANGE
+
+        # start_charging + set_current actions fire for the resume
+        start_calls = [c for c in calls if c.data["entity_id"] == START_CHARGING_SCRIPT]
+        set_calls = [c for c in calls if c.data["entity_id"] == SET_CURRENT_SCRIPT]
+        assert len(start_calls) >= 1
+        assert len(set_calls) >= 1
+        assert set_calls[-1].data["variables"]["current_a"] == resumed_current

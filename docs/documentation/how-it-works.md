@@ -34,7 +34,7 @@ That's it. It's a reactive, real-time load balancer for a single EV charger.
 
 The integration focuses exclusively on **load balancing** — ensuring your home never exceeds the service limit. It does not know about electricity prices, solar production, or battery state. However, you can easily combine it with automations that handle these concerns:
 
-**Solar surplus charging:** Create a template sensor that calculates your available solar surplus in Amps, then use an automation to write that value to `number.*_max_charger_current`. The load balancer will use it as the upper limit and ensure the charger never exceeds your service limit on top of that.
+**Solar surplus charging:** Create a template sensor that calculates your available solar surplus in Amps, then use an automation to write that value to `number.*_max_charger_current`. The load balancer will use it as the upper limit and ensure the charger never exceeds your service limit on top of that. **When the surplus drops to 0 A, charging stops automatically** — setting max charger current to 0 bypasses the balancing algorithm entirely and outputs 0 A/0 W.
 
 ```yaml
 # Example: automation to set charger max from solar surplus
@@ -51,28 +51,32 @@ automation:
           value: "{{ states('sensor.solar_surplus_amps') | float(0) | round(0) }}"
 ```
 
-**Time-of-use tariffs:** Use an automation to toggle `switch.*_load_balancing_enabled` on/off based on the current tariff period, or adjust `number.*_max_charger_current` to a lower value during peak hours.
+**Time-of-use tariffs:** Use an automation to toggle `switch.*_load_balancing_enabled` on/off based on the current tariff period, or adjust `number.*_max_charger_current` to a lower value (or `0` to stop entirely) during peak hours.
 
 ```yaml
-# Example: disable charging entirely during peak hours
+# Example: disable charging entirely during peak hours (using max = 0)
 automation:
-  - alias: "Disable EV charging during peak"
+  - alias: "Stop EV charging during peak"
     trigger:
       - platform: time
         at: "17:00:00"
     action:
-      - action: switch.turn_off
+      - action: number.set_value
         target:
-          entity_id: switch.ev_charger_load_balancer_load_balancing_enabled
+          entity_id: number.ev_charger_load_balancer_max_charger_current
+        data:
+          value: 0
 
   - alias: "Re-enable EV charging off-peak"
     trigger:
       - platform: time
         at: "21:00:00"
     action:
-      - action: switch.turn_on
+      - action: number.set_value
         target:
-          entity_id: switch.ev_charger_load_balancer_load_balancing_enabled
+          entity_id: number.ev_charger_load_balancer_max_charger_current
+        data:
+          value: 32
 ```
 
 ```yaml
@@ -131,7 +135,7 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 
 | Entity | Range | What it controls |
 |---|---|---|
-| `number.*_max_charger_current` | 1–80 A | The maximum current your charger can handle. The integration will never set a current higher than this. Change it at runtime to temporarily limit charging. |
+| `number.*_max_charger_current` | 0–80 A | The maximum current your charger can handle. The integration will never set a current higher than this. **Setting this to 0 A stops charging immediately** without running the load-balancing algorithm, and keeps it stopped until changed back to a non-zero value. Change it at runtime to temporarily limit or disable charging. |
 | `number.*_min_ev_current` | 1–32 A | The minimum current at which your charger can operate (IEC 61851 standard: 6 A for AC). If the computed target falls below this, charging stops entirely rather than running at an unsafe low current. |
 | `number.*_ramp_up_time` | 5–300 s | How many seconds the integration must wait after a current reduction before it allows the current to increase again. Lower values respond faster but risk oscillation on spiky loads. **Recommended: 20–30 s for most installations.** |
 | `number.*_overload_trigger_delay` | 1–60 s | How long a continuous overload must persist before the correction loop starts. The default (2 s) absorbs most transient spikes (kettles, washing machine spin) without triggering unnecessary adjustments. |
@@ -173,7 +177,7 @@ The balancer is **event-driven** — it does not poll on a timer. A recomputatio
 | Trigger | What happens | Speed |
 |---|---|---|
 | **Power meter state change** | Sensor reports a new Watt value. The coordinator reads it and runs the full algorithm. | Instant — same HA event-loop tick. |
-| **Max charger current changed** | User or automation changes the number entity. If meter is available, coordinator re-reads the current meter value and recomputes. If meter is unavailable, the fallback limit is re-applied with the new cap. | Instant. |
+| **Max charger current changed** | User or automation changes the number entity. If set to **0 A**, charging stops immediately and all subsequent power meter events output 0 A (load balancing bypassed). For any non-zero value, if meter is available, coordinator re-reads the current meter value and recomputes. If meter is unavailable, the fallback limit is re-applied with the new cap. | Instant. |
 | **Min EV current changed** | Same as above. If the new minimum is higher than the current target, charging stops immediately even while the meter is unavailable. | Instant. |
 | **Load balancing re-enabled** | The switch is turned back on. Full recomputation using current meter value. | Instant. |
 | **Overload correction loop** | When the system is overloaded, a time-based loop fires corrections at a configurable interval even if the meter has not reported a new value. | Every `overload_loop_interval` seconds. |
@@ -293,7 +297,7 @@ The `sensor.*_balancer_state` diagnostic sensor tracks what the integration is d
 
 | State | What it means | When you see it |
 |---|---|---|
-| `stopped` | Charger target is 0 A. | Overload, initial state, or available current is below minimum. |
+| `stopped` | Charger target is 0 A. | Overload, initial state, available current is below minimum, or max charger current is set to 0 A. |
 | `active` | Charger is running at a steady current. | Normal operation — target hasn't changed since last cycle. |
 | `adjusting` | Charger current just changed this cycle. | Load shifted and the integration adjusted the current. |
 | `ramp_up_hold` | An increase is needed but the ramp-up cooldown hasn't elapsed yet. | Load dropped recently but a reduction happened within the last `ramp_up_time` seconds. |
