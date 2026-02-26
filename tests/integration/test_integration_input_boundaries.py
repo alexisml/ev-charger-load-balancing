@@ -150,7 +150,7 @@ class TestMinEvCurrentBoundaries:
     async def test_set_exactly_at_maximum_limit(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Setting min EV current to 32 A charges at 32 A with no house load; stops when load exceeds the limit."""
+        """Boundary case where min_ev_current equals max_charger_current (32 A): charges at 32 A with no house load; stops when additional load pushes available current below the minimum."""
         await setup_integration(hass, mock_config_entry)
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         coordinator.ramp_up_time_s = 0.0

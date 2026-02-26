@@ -261,12 +261,12 @@ class TestThrottledEvFix:
         assert float(hass.states.get(current_set_id).state) == 17.0
         assert float(hass.states.get(available_id).state) == 17.0
 
-    async def test_ev_charging_sensor_reflects_throttle_detection(
+    async def test_ev_charging_sensor_reflects_charger_status_changes(
         self, hass: HomeAssistant
     ) -> None:
-        """EV charging debug sensor turns off when the charger status sensor reports not-charging.
+        """EV charging diagnostic sensor turns off when the charger status sensor reports not-charging.
 
-        The ev_charging sensor tracks the coordinator's detection of whether the EV
+        The ev_charging diagnostic sensor tracks the coordinator's detection of whether the EV
         is actively drawing current.  It switches off when the charger status sensor
         indicates the EV is idle or finished, allowing operators to verify the
         status sensor is working correctly.
