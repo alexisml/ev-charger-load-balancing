@@ -118,6 +118,7 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 | Entity | Type | What it tells you |
 |---|---|---|
 | `sensor.*_charging_current_set` | Measurement (A) | The charging current the integration last sent to the charger. Shows `0` when charging is stopped. This is what your charger *should* be doing. |
+| `sensor.*_power_set` | Measurement (W) | The charging power the integration last sent to the charger, derived from `charging_current_set × voltage`. Shows `0` when charging is stopped. |
 | `sensor.*_available_current` | Measurement (A) | The maximum current the EV can safely draw right now given the non-EV household load. The charging current set is always ≤ this value. |
 | `sensor.*_last_action_reason` | Diagnostic | Why the last recomputation happened. Values: `power_meter_update` (normal), `manual_override`, `fallback_unavailable`, `parameter_change`. |
 | `sensor.*_balancer_state` | Diagnostic | The integration's operational state right now — see [Balancer states](#balancer-states) below. |
@@ -130,6 +131,7 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 | `binary_sensor.*_load_balancing_active` | — | **On** = the charger is being actively controlled (current > 0 A). **Off** = charger is stopped or idle. |
 | `binary_sensor.*_power_meter_status` | Connectivity | **On** = your power meter is reporting valid readings. **Off** = meter is unavailable or unknown. |
 | `binary_sensor.*_meter_fallback_active` | Problem | **On** = the meter is unavailable and a fallback behavior is in effect. **Off** = normal operation. |
+| `binary_sensor.*_ev_charging` | Diagnostic | **On** = the coordinator believes the EV is actively drawing current (charger status is `Charging` or no status sensor is configured). **Off** = the coordinator detected the EV is not drawing current and used `0` in its power estimate. Only meaningful when a [charger status sensor](#charger-status-sensor-optional) is configured. |
 
 ### Number entities (adjustable at runtime)
 
