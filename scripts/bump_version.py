@@ -8,10 +8,14 @@ Versioning follows the Home Assistant convention:
 
 Examples: 2026.2.0, 2026.2.1, 2026.3.0
 
-Pre-release versions use the branch name as the third component:
+Pre-release versions use the branch name as the third component, with an optional
+counter suffix when the same branch has been pre-released more than once in a month:
   YYYY.M.branch-slug
+  YYYY.M.branch-slug.1
+  YYYY.M.branch-slug.2
+  ...
 
-Examples: 2026.2.feature-my-work, 2026.2.fix-some-bug
+Examples: 2026.2.feature-my-work, 2026.2.feature-my-work.1, 2026.2.fix-some-bug
 
 Usage:
   python scripts/bump_version.py                            # print the next release version
@@ -90,9 +94,14 @@ def branch_slug(branch: str) -> str:
 def prerelease_version(branch: str) -> str:
     """Compute a pre-release calendar version for the given branch.
 
-    The format is ``YYYY.M.branch-slug`` where ``branch-slug`` is a
-    sanitised, lowercase representation of *branch* (slashes and
-    non-alphanumeric characters become dashes).
+    The base format is ``YYYY.M.branch-slug``. If a tag for that base already
+    exists, a counter suffix is appended and incremented for each subsequent
+    pre-release of the same branch within the same month:
+
+    - First pre-release:  ``YYYY.M.branch-slug``
+    - Second pre-release: ``YYYY.M.branch-slug.1``
+    - Third pre-release:  ``YYYY.M.branch-slug.2``
+    - …
 
     Examples::
 
@@ -100,8 +109,23 @@ def prerelease_version(branch: str) -> str:
         prerelease_version("main")             -> "2026.2.main"
     """
     now = datetime.now(tz=timezone.utc)
+    year, month = now.year, now.month
     slug = branch_slug(branch)
-    return f"{now.year}.{now.month}.{slug}"
+    base_tag = f"v{year}.{month}.{slug}"
+
+    existing = get_existing_tags()
+    if base_tag not in existing:
+        return f"{year}.{month}.{slug}"
+
+    # Base tag exists — find the highest counter suffix (vYYYY.M.slug.N)
+    counter_pattern = re.compile(r"^" + re.escape(base_tag) + r"\.(\d+)$")
+    max_counter = 0
+    for tag in existing:
+        m = counter_pattern.match(tag)
+        if m:
+            max_counter = max(max_counter, int(m.group(1)))
+
+    return f"{year}.{month}.{slug}.{max_counter + 1}"
 
 
 def main() -> None:

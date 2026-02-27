@@ -2,7 +2,7 @@
 
 Covers:
 - branch_slug: sanitises arbitrary git branch names into URL-safe slugs
-- prerelease_version: produces YYYY.M.branch-slug for a given branch
+- prerelease_version: produces YYYY.M.branch-slug[.N] for a given branch, incrementing N when the base tag already exists
 - next_version: computes the next YYYY.M.N counter from existing tags
 """
 
@@ -71,35 +71,65 @@ class TestBranchSlug:
 
 
 class TestPrereleaseVersion:
-    """Verify that pre-release versions follow the YYYY.M.branch-slug format."""
+    """Verify that pre-release versions follow the YYYY.M.branch-slug[.N] format."""
 
-    def test_simple_branch_produces_correct_version(self):
-        """A simple branch name yields year.month.branch-slug without any counter."""
-        with patch.object(_mod, "datetime") as mock_dt:
+    def test_no_existing_tag_returns_base_version(self):
+        """The first pre-release for a branch has no counter suffix."""
+        with patch.object(_mod, "get_existing_tags", return_value=[]), \
+             patch.object(_mod, "datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 15, tzinfo=timezone.utc)
             result = prerelease_version("my-feature")
         assert result == "2026.2.my-feature"
 
     def test_feature_slash_branch_produces_slug(self):
         """A feature/branch-name is slugified so the slash does not appear in the version."""
-        with patch.object(_mod, "datetime") as mock_dt:
+        with patch.object(_mod, "get_existing_tags", return_value=[]), \
+             patch.object(_mod, "datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 2, 15, tzinfo=timezone.utc)
             result = prerelease_version("feature/add-prerelease")
         assert result == "2026.2.feature-add-prerelease"
 
     def test_month_with_no_leading_zero(self):
         """Month numbers below 10 appear without a leading zero in the version string."""
-        with patch.object(_mod, "datetime") as mock_dt:
+        with patch.object(_mod, "get_existing_tags", return_value=[]), \
+             patch.object(_mod, "datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2026, 3, 1, tzinfo=timezone.utc)
             result = prerelease_version("fix/something")
         assert result == "2026.3.fix-something"
 
     def test_year_and_month_reflect_current_date(self):
         """The year and month in the pre-release version always come from the current UTC date."""
-        with patch.object(_mod, "datetime") as mock_dt:
+        with patch.object(_mod, "get_existing_tags", return_value=[]), \
+             patch.object(_mod, "datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2027, 11, 5, tzinfo=timezone.utc)
             result = prerelease_version("hotfix")
         assert result.startswith("2027.11.")
+
+    def test_base_tag_exists_appends_counter_one(self):
+        """When the base pre-release tag already exists, the counter suffix .1 is appended."""
+        with patch.object(_mod, "get_existing_tags", return_value=["v2026.2.my-feature"]), \
+             patch.object(_mod, "datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 2, 15, tzinfo=timezone.utc)
+            result = prerelease_version("my-feature")
+        assert result == "2026.2.my-feature.1"
+
+    def test_counter_increments_beyond_one(self):
+        """Each subsequent pre-release for the same branch increments the counter."""
+        tags = ["v2026.2.my-feature", "v2026.2.my-feature.1", "v2026.2.my-feature.2"]
+        with patch.object(_mod, "get_existing_tags", return_value=tags), \
+             patch.object(_mod, "datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 2, 15, tzinfo=timezone.utc)
+            result = prerelease_version("my-feature")
+        assert result == "2026.2.my-feature.3"
+
+    def test_other_branch_tags_do_not_affect_counter(self):
+        """Pre-release tags for a different branch slug do not influence the counter for the current branch."""
+        tags = ["v2026.2.other-branch", "v2026.2.other-branch.1"]
+        with patch.object(_mod, "get_existing_tags", return_value=tags), \
+             patch.object(_mod, "datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 2, 15, tzinfo=timezone.utc)
+            result = prerelease_version("my-feature")
+        assert result == "2026.2.my-feature"
 
 
 # ---------------------------------------------------------------------------
