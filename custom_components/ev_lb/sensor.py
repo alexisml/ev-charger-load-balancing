@@ -70,6 +70,7 @@ class EvLbCurrentSetSensor(RestoreSensor):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
@@ -109,6 +110,7 @@ class EvLbPowerSetSensor(RestoreSensor):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
@@ -148,6 +150,7 @@ class EvLbAvailableCurrentSensor(RestoreSensor):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
@@ -185,6 +188,7 @@ class EvLbLastActionReasonSensor(RestoreSensor):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
@@ -229,6 +233,7 @@ class EvLbBalancerStateSensor(RestoreSensor):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
@@ -274,6 +279,7 @@ class EvLbConfiguredFallbackSensor(RestoreSensor):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
