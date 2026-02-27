@@ -35,6 +35,12 @@ Smart, local, open-source load balancing for EV chargers integrated with Home As
 
 ---
 
+> 🤖 **AI Disclosure**
+>
+> A significant portion of this project — including code, documentation, and design — was developed with the assistance of AI tools (GitHub Copilot / large-language models). All AI-generated output has been reviewed, but users and contributors should audit the code independently before relying on it in production environments.
+
+---
+
 ## What it does
 
 The integration watches your home's power meter. When total service power changes, it instantly recalculates how much current your EV charger can safely use without tripping your service limit. If load goes up, charger current goes down — **immediately**. If load goes down, charger current goes back up — after a short cooldown to prevent oscillation.
@@ -125,8 +131,3 @@ Development artifacts (research, design decisions, PR retrospectives) are under 
 
 Apache 2.0 — see the [LICENSE](LICENSE) file.
 
----
-
-> 🤖 **AI Disclosure**
->
-> A significant portion of this project — including code, documentation, and design — was developed with the assistance of AI tools (GitHub Copilot / large-language models). All AI-generated output has been reviewed, but users and contributors should audit the code independently before relying on it in production environments.
