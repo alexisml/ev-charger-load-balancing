@@ -65,6 +65,7 @@ class EvLbActiveBinarySensor(BinarySensorEntity, RestoreEntity):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
@@ -109,6 +110,7 @@ class EvLbMeterStatusBinarySensor(BinarySensorEntity, RestoreEntity):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
@@ -154,6 +156,7 @@ class EvLbFallbackActiveBinarySensor(BinarySensorEntity, RestoreEntity):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:
@@ -201,6 +204,7 @@ class EvLbEvChargingBinarySensor(BinarySensorEntity, RestoreEntity):
                 self._handle_update,
             )
         )
+        self._handle_update()
 
     @callback
     def _handle_update(self) -> None:

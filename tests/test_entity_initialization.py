@@ -270,10 +270,10 @@ class TestBinarySensorDefaults:
         state = hass.states.get(fallback_id)
         assert state.state == "off"
 
-    async def test_active_binary_sensor_restores_on_state(
+    async def test_active_binary_sensor_reflects_coordinator_state_on_startup(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Active binary sensor restores its previous state after a restart."""
+        """Active binary sensor displays the coordinator's current state on startup rather than a previously restored stale value."""
         mock_restore_cache(
             hass,
             [State(_BINARY_ACTIVE, "on")],
@@ -285,7 +285,8 @@ class TestBinarySensorDefaults:
         )
         state = hass.states.get(active_id)
         assert state is not None
-        assert state.state == "on"
+        # Coordinator starts with active=False; the immediate sync overrides the restored "on" value.
+        assert state.state == "off"
 
 
 # ---------------------------------------------------------------------------
