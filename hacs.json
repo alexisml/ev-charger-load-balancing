@@ -1,5 +1,5 @@
 {
-  "name": "EV Charger Load Balancing",
+  "name": "Watt-O-Balancer",
   "render_readme": true,
   "homeassistant": "2023.6.0",
   "hacs": "2.0.0"
