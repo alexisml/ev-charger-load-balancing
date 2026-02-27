@@ -131,11 +131,14 @@ class EvLoadBalancerCoordinator:
 
         # Action diagnostic state (read by diagnostic sensors)
         self.last_action_error: str | None = None
-        self.last_action_timestamp: str | None = None
+        self.last_action_timestamp: datetime | None = None
 
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None
         self._time_fn = time.monotonic
+
+        # Async sleep function — injectable for testing
+        self._sleep_fn = asyncio.sleep
 
         # Overload correction loop tracking
         self._overload_trigger_unsub: Callable[[], None] | None = None
@@ -901,6 +904,10 @@ class EvLoadBalancerCoordinator:
                 current_w=current_w,
             )
 
+        # Refresh diagnostic sensors after actions complete (the initial
+        # dispatcher signal is sent before actions run in the background).
+        async_dispatcher_send(self.hass, self.signal_update)
+
     async def _call_action(
         self,
         entity_id: str | None,
@@ -942,9 +949,7 @@ class EvLoadBalancerCoordinator:
                 )
                 # Record success diagnostics
                 self.last_action_error = None
-                self.last_action_timestamp = (
-                    datetime.now(tz=timezone.utc).isoformat()
-                )
+                self.last_action_timestamp = datetime.now(tz=timezone.utc)
                 pn_async_dismiss(
                     self.hass,
                     NOTIFICATION_ACTION_FAILED_FMT.format(
@@ -965,12 +970,11 @@ class EvLoadBalancerCoordinator:
                         exc,
                         delay,
                     )
-                    await asyncio.sleep(delay)
+                    await self._sleep_fn(delay)
 
         # All retries exhausted — record failure diagnostics
-        now_iso = datetime.now(tz=timezone.utc).isoformat()
         self.last_action_error = f"{action_name}: {last_exc}"
-        self.last_action_timestamp = now_iso
+        self.last_action_timestamp = datetime.now(tz=timezone.utc)
         _LOGGER.warning(
             "Action %s failed via %s after %d attempts: %s",
             action_name,

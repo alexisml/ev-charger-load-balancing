@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from homeassistant.components.sensor import (
     RestoreSensor,
     SensorDeviceClass,
@@ -356,7 +358,12 @@ class EvLbLastActionTimestampSensor(RestoreSensor):
         await super().async_added_to_hass()
         last = await self.async_get_last_sensor_data()
         if last and last.native_value is not None:
-            self._attr_native_value = last.native_value
+            try:
+                self._attr_native_value = datetime.fromisoformat(
+                    str(last.native_value)
+                )
+            except (ValueError, TypeError):
+                pass
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
