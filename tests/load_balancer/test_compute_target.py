@@ -107,3 +107,67 @@ class TestComputeTargetCurrent:
             min_charger_a=6.0,
         )
         assert target_a is None
+
+    def test_overload_exact_negative_available(self):
+        """The system calculates exactly how much service capacity is exceeded when consumption is too high."""
+        # 9000 W / 230 V ≈ 39.13 A > 32 A limit → available = 32 - 39.13 ≈ -7.13 A
+        service_current_a = 9000.0 / 230.0
+        available_a, target_a = compute_target_current(
+            service_current_a=service_current_a,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert abs(available_a - (32.0 - service_current_a)) < 1e-9
+        assert target_a is None
+
+
+class TestComputeTargetCurrentSolar:
+    """Solar export (negative service current) scenarios for compute_target_current.
+
+    When the power meter reports a negative value, grid export is occurring
+    (e.g. solar panels producing more than the house consumes).  The non-EV
+    load is clamped to zero so the EV receives the full service capacity.
+    """
+
+    def test_solar_export_with_idle_ev_offers_full_capacity(self):
+        """Charging can use full service capacity when solar panels export power and the EV is not yet charging."""
+        # Solar exports 5 kW: service_current_a = -5000/230 ≈ -21.7 A
+        # non_ev = max(0, -21.7 - 0) = 0 → available = 32 A → target = 32 A
+        available_a, target_a = compute_target_current(
+            service_current_a=-5000.0 / 230.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert available_a == 32.0
+        assert target_a == 32.0
+
+    def test_solar_export_with_active_ev_still_offers_full_capacity(self):
+        """Active EV charging continues at full service capacity when solar export covers all household consumption."""
+        # Solar exports enough that the net meter reading is negative even with EV active
+        # service_current_a = -10000/230 ≈ -43.5 A, EV last set at 18 A
+        # non_ev = max(0, -43.5 - 18) = 0 → available = 32 A → target = 32 A
+        available_a, target_a = compute_target_current(
+            service_current_a=-10000.0 / 230.0,
+            current_set_a=18.0,
+            max_service_a=32.0,
+            max_charger_a=32.0,
+            min_charger_a=6.0,
+        )
+        assert available_a == 32.0
+        assert target_a == 32.0
+
+    def test_solar_export_target_capped_at_charger_max(self):
+        """Charging rate respects charger hardware limits even when solar export provides additional headroom."""
+        available_a, target_a = compute_target_current(
+            service_current_a=-5000.0 / 230.0,
+            current_set_a=0.0,
+            max_service_a=32.0,
+            max_charger_a=16.0,
+            min_charger_a=6.0,
+        )
+        assert available_a == 32.0
+        assert target_a == 16.0
