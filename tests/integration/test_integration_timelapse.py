@@ -228,7 +228,6 @@ class TestFullChargingTimelapse:
         assert hass.states.get(state_id).state == STATE_ADJUSTING
 
 
-
 # ---------------------------------------------------------------------------
 # 7-step timelapse with charger status sensor
 # ---------------------------------------------------------------------------
@@ -307,6 +306,7 @@ class TestChargingTimelapseWithIsChargingSensor:
 
         assert float(hass.states.get(current_set_id).state) == 16.0
         assert hass.states.get(active_id).state == "on"
+        assert hass.states.get(state_id).state == STATE_ADJUSTING
 
         # -------------------------------------------------------------------
         # Step 2: EV pauses (sensor→Available) while house load spikes to 28 A
