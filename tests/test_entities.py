@@ -190,7 +190,7 @@ class TestSensorEntities:
     async def test_last_action_reason_sensor_initial_value(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Last action reason is unknown before any events occur."""
+        """Last action reason is empty before any balancing action occurs."""
         await setup_integration(hass, mock_config_entry)
 
         ent_reg = er.async_get(hass)
@@ -200,7 +200,7 @@ class TestSensorEntities:
         assert entity_id is not None
         state = hass.states.get(entity_id)
         assert state is not None
-        assert state.state == "unknown"
+        assert state.state == ""
 
     async def test_balancer_state_sensor_initial_value(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
