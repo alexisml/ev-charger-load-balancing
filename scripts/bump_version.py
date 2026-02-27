@@ -8,9 +8,16 @@ Versioning follows the Home Assistant convention:
 
 Examples: 2026.2.0, 2026.2.1, 2026.3.0
 
+Pre-release versions use the branch name as the third component:
+  YYYY.M.branch-slug
+
+Examples: 2026.2.feature-my-work, 2026.2.fix-some-bug
+
 Usage:
-  python scripts/bump_version.py            # print the next version
-  python scripts/bump_version.py --apply    # also update manifest.json
+  python scripts/bump_version.py                            # print the next release version
+  python scripts/bump_version.py --apply                    # also update manifest.json
+  python scripts/bump_version.py --prerelease <branch>      # print a pre-release version
+  python scripts/bump_version.py --prerelease <branch> --apply  # also update manifest.json
 """
 
 from __future__ import annotations
@@ -25,6 +32,8 @@ from pathlib import Path
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "custom_components" / "ev_lb" / "manifest.json"
 TOP_MANIFEST_PATH = Path(__file__).resolve().parent.parent / "manifest.json"
 TAG_PATTERN = re.compile(r"^v(\d{4})\.(\d{1,2})\.(\d+)$")
+_BRANCH_SLUG_STRIP = re.compile(r"[^a-z0-9]+")
+_BRANCH_SLUG_TRIM = re.compile(r"^-+|-+$")
 
 
 def get_existing_tags() -> list[str]:
@@ -60,11 +69,56 @@ def update_manifest(version: str) -> None:
         path.write_text(json.dumps(data, indent=2) + "\n")
 
 
+def branch_slug(branch: str) -> str:
+    """Return a URL-safe, lowercase slug derived from a git branch name.
+
+    Slashes (e.g. ``feature/my-work``) are replaced with dashes, all
+    non-alphanumeric characters are collapsed to a single dash, and
+    leading/trailing dashes are stripped.
+
+    Examples::
+
+        branch_slug("feature/my-work")  -> "feature-my-work"
+        branch_slug("fix/some_bug")     -> "fix-some-bug"
+        branch_slug("main")             -> "main"
+    """
+    slug = branch.lower().replace("/", "-")
+    slug = _BRANCH_SLUG_STRIP.sub("-", slug)
+    return _BRANCH_SLUG_TRIM.sub("", slug)
+
+
+def prerelease_version(branch: str) -> str:
+    """Compute a pre-release calendar version for the given branch.
+
+    The format is ``YYYY.M.branch-slug`` where ``branch-slug`` is a
+    sanitised, lowercase representation of *branch* (slashes and
+    non-alphanumeric characters become dashes).
+
+    Examples::
+
+        prerelease_version("feature/my-work")  -> "2026.2.feature-my-work"
+        prerelease_version("main")             -> "2026.2.main"
+    """
+    now = datetime.now(tz=timezone.utc)
+    slug = branch_slug(branch)
+    return f"{now.year}.{now.month}.{slug}"
+
+
 def main() -> None:
     """Entry point."""
-    version = next_version()
+    apply = "--apply" in sys.argv
 
-    if "--apply" in sys.argv:
+    if "--prerelease" in sys.argv:
+        idx = sys.argv.index("--prerelease")
+        if idx + 1 >= len(sys.argv) or sys.argv[idx + 1].startswith("-"):
+            print("Usage: bump_version.py --prerelease <branch> [--apply]", file=sys.stderr)
+            sys.exit(1)
+        branch = sys.argv[idx + 1]
+        version = prerelease_version(branch)
+    else:
+        version = next_version()
+
+    if apply:
         update_manifest(version)
         print(f"Updated {MANIFEST_PATH} and {TOP_MANIFEST_PATH} to {version}")
     else:

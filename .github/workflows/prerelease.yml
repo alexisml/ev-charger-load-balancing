@@ -1,0 +1,60 @@
+name: Pre-release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    name: Tag and publish GitHub Pre-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute pre-release version
+        id: version
+        run: |
+          BRANCH="${GITHUB_REF_NAME}"
+          VERSION=$(python3 scripts/bump_version.py --prerelease "$BRANCH")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Pre-release version: $VERSION"
+
+      - name: Check if tag already exists
+        id: tag_check
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if git tag -l "v$VERSION" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Tag v$VERSION already exists — skipping pre-release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Create release zip
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          cd custom_components/ev_lb
+          zip -r ../../ev_lb.zip .
+
+      - name: Create GitHub Pre-release
+        if: steps.tag_check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.version }}"
+          prerelease: true
+          generate_release_notes: true
+          files: ev_lb.zip
