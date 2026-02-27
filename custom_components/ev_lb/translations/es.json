@@ -79,6 +79,12 @@
       },
       "configured_fallback": {
         "name": "Respaldo de medidor configurado"
+      },
+      "last_action_error": {
+        "name": "Último error de acción"
+      },
+      "last_action_timestamp": {
+        "name": "Última marca de tiempo de acción"
       }
     },
     "binary_sensor": {

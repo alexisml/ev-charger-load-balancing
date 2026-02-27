@@ -79,6 +79,12 @@
       },
       "configured_fallback": {
         "name": "Configured meter fallback"
+      },
+      "last_action_error": {
+        "name": "Last action error"
+      },
+      "last_action_timestamp": {
+        "name": "Last action timestamp"
       }
     },
     "binary_sensor": {

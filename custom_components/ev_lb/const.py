@@ -48,6 +48,10 @@ DEFAULT_UNAVAILABLE_FALLBACK_CURRENT = 6.0  # Fallback current for "set_current"
 DEFAULT_OVERLOAD_TRIGGER_DELAY = 2.0  # Seconds — overload must persist this long before loop starts
 DEFAULT_OVERLOAD_LOOP_INTERVAL = 5.0  # Seconds — interval between recomputes while overloaded
 
+# Action retry defaults — exponential backoff when a charger script call fails
+ACTION_MAX_RETRIES = 3  # Total attempts = 1 initial + 3 retries
+ACTION_RETRY_BASE_DELAY_S = 1.0  # Base delay in seconds (1s, 2s, 4s)
+
 # Dispatcher signal template — format with entry_id
 SIGNAL_UPDATE_FMT = f"{DOMAIN}_update_{{entry_id}}"
 

@@ -34,6 +34,8 @@ async def async_setup_entry(
             EvLbLastActionReasonSensor(entry, coordinator),
             EvLbBalancerStateSensor(entry, coordinator),
             EvLbConfiguredFallbackSensor(entry, coordinator),
+            EvLbLastActionErrorSensor(entry, coordinator),
+            EvLbLastActionTimestampSensor(entry, coordinator),
         ]
     )
 
@@ -281,4 +283,91 @@ class EvLbConfiguredFallbackSensor(RestoreSensor):
     def _handle_update(self) -> None:
         """Update sensor state from coordinator."""
         self._attr_native_value = self._coordinator.configured_fallback
+        self.async_write_ha_state()
+
+
+class EvLbLastActionErrorSensor(RestoreSensor):
+    """Diagnostic sensor showing the last charger action error.
+
+    Displays the error message from the most recent failed action script
+    call, or None when the last action succeeded.  Clears automatically
+    on the next successful action execution.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "last_action_error"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_value = None
+
+    def __init__(
+        self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
+    ) -> None:
+        """Initialise the sensor."""
+        self._attr_unique_id = f"{entry.entry_id}_last_action_error"
+        self._attr_device_info = get_device_info(entry)
+        self._coordinator = coordinator
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last known value and subscribe to coordinator updates."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last and last.native_value is not None:
+            self._attr_native_value = last.native_value
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._coordinator.signal_update,
+                self._handle_update,
+            )
+        )
+        self._handle_update()
+
+    @callback
+    def _handle_update(self) -> None:
+        """Update sensor state from coordinator."""
+        self._attr_native_value = self._coordinator.last_action_error
+        self.async_write_ha_state()
+
+
+class EvLbLastActionTimestampSensor(RestoreSensor):
+    """Diagnostic sensor showing when the last charger action was executed.
+
+    Displays the ISO 8601 UTC timestamp of the most recent action script
+    call (whether it succeeded or failed).  Useful for verifying that
+    commands are reaching the charger and for debugging timing issues.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "last_action_timestamp"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_native_value = None
+
+    def __init__(
+        self, entry: ConfigEntry, coordinator: EvLoadBalancerCoordinator
+    ) -> None:
+        """Initialise the sensor."""
+        self._attr_unique_id = f"{entry.entry_id}_last_action_timestamp"
+        self._attr_device_info = get_device_info(entry)
+        self._coordinator = coordinator
+
+    async def async_added_to_hass(self) -> None:
+        """Restore last known value and subscribe to coordinator updates."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last and last.native_value is not None:
+            self._attr_native_value = last.native_value
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._coordinator.signal_update,
+                self._handle_update,
+            )
+        )
+        self._handle_update()
+
+    @callback
+    def _handle_update(self) -> None:
+        """Update sensor state from coordinator."""
+        self._attr_native_value = self._coordinator.last_action_timestamp
         self.async_write_ha_state()
