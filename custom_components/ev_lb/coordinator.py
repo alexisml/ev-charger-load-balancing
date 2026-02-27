@@ -915,16 +915,11 @@ class EvLoadBalancerCoordinator:
         action_name: str,
         **variables: float | str,
     ) -> None:
-        """Call a configured action script with retry/backoff on failure.
+        """Call a configured action script, retrying with exponential backoff on failure.
 
-        Silently skips when the action is not configured.  On failure, retries
-        with exponential backoff (up to ``ACTION_MAX_RETRIES`` attempts).
-        After all retries are exhausted, logs a warning, fires an
-        ``ev_lb_action_failed`` event, creates a persistent dashboard
-        notification, and records the error in diagnostic state.
-
-        On success, clears any previous action error, records the action
-        timestamp, and dismisses the action-failed persistent notification.
+        Silently skips when the action is not configured.  On success, clears
+        any previous error.  After all retries are exhausted, records the
+        failure in diagnostic state and notifies the user.
         """
         if not entity_id:
             return
@@ -937,67 +932,60 @@ class EvLoadBalancerCoordinator:
         for attempt in range(1 + ACTION_MAX_RETRIES):
             try:
                 await self.hass.services.async_call(
-                    "script",
-                    "turn_on",
-                    service_data,
-                    blocking=True,
+                    "script", "turn_on", service_data, blocking=True,
                 )
-                _LOGGER.debug(
-                    "Action %s executed via %s (variables=%s)",
-                    action_name,
-                    entity_id,
-                    variables or {},
-                )
-                # Record success diagnostics
-                self.last_action_error = None
-                self.last_action_timestamp = datetime.now(tz=timezone.utc)
-                pn_async_dismiss(
-                    self.hass,
-                    NOTIFICATION_ACTION_FAILED_FMT.format(
-                        entry_id=self.entry.entry_id
-                    ),
-                )
-                return
-            except Exception as exc:  # noqa: BLE001 — catch all so a broken script never crashes the integration
+            except Exception as exc:  # noqa: BLE001 — never crash on a broken script
                 last_exc = exc
                 if attempt < ACTION_MAX_RETRIES:
                     delay = ACTION_RETRY_BASE_DELAY_S * (2 ** attempt)
                     _LOGGER.debug(
-                        "Action %s failed (attempt %d/%d) via %s: %s — retrying in %.1f s",
-                        action_name,
-                        attempt + 1,
-                        1 + ACTION_MAX_RETRIES,
-                        entity_id,
-                        exc,
-                        delay,
+                        "Action %s attempt %d/%d failed via %s: %s — retrying in %.1f s",
+                        action_name, attempt + 1, 1 + ACTION_MAX_RETRIES,
+                        entity_id, exc, delay,
                     )
                     await self._sleep_fn(delay)
+                continue
+            # Success
+            _LOGGER.debug("Action %s executed via %s", action_name, entity_id)
+            self._record_action_success()
+            return
 
-        # All retries exhausted — record failure diagnostics
-        self.last_action_error = f"{action_name}: {last_exc}"
+        self._record_action_failure(action_name, entity_id, last_exc)
+
+    def _record_action_success(self) -> None:
+        """Clear error state and dismiss any action-failed notification."""
+        self.last_action_error = None
         self.last_action_timestamp = datetime.now(tz=timezone.utc)
+        pn_async_dismiss(
+            self.hass,
+            NOTIFICATION_ACTION_FAILED_FMT.format(entry_id=self.entry.entry_id),
+        )
+
+    def _record_action_failure(
+        self, action_name: str, entity_id: str, exc: Exception | None,
+    ) -> None:
+        """Log, record, and notify the user about a failed action after retries."""
+        self.last_action_error = f"{action_name}: {exc}"
+        self.last_action_timestamp = datetime.now(tz=timezone.utc)
+        entry_id = self.entry.entry_id
         _LOGGER.warning(
             "Action %s failed via %s after %d attempts: %s",
-            action_name,
-            entity_id,
-            1 + ACTION_MAX_RETRIES,
-            last_exc,
+            action_name, entity_id, 1 + ACTION_MAX_RETRIES, exc,
         )
-        entry_id = self.entry.entry_id
         self.hass.bus.async_fire(
             EVENT_ACTION_FAILED,
             {
                 "entry_id": entry_id,
                 "action_name": action_name,
                 "entity_id": entity_id,
-                "error": str(last_exc),
+                "error": str(exc),
             },
         )
         pn_async_create(
             self.hass,
             (
-                f"Action script `{entity_id}` failed for action `{action_name}`: "
-                f"{last_exc}. "
+                f"Action script `{entity_id}` failed for action "
+                f"`{action_name}`: {exc}. "
                 "Check your charger action script configuration."
             ),
             title="EV Load Balancer — Action Failed",
