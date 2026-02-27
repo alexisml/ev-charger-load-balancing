@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 MANIFEST_PATH = Path(__file__).resolve().parent.parent / "custom_components" / "ev_lb" / "manifest.json"
+TOP_MANIFEST_PATH = Path(__file__).resolve().parent.parent / "manifest.json"
 TAG_PATTERN = re.compile(r"^v(\d{4})\.(\d{1,2})\.(\d+)$")
 
 
@@ -52,10 +53,11 @@ def next_version() -> str:
 
 
 def update_manifest(version: str) -> None:
-    """Write the new version into manifest.json."""
-    data = json.loads(MANIFEST_PATH.read_text())
-    data["version"] = version
-    MANIFEST_PATH.write_text(json.dumps(data, indent=2) + "\n")
+    """Write the new version into both manifest.json files."""
+    for path in (MANIFEST_PATH, TOP_MANIFEST_PATH):
+        data = json.loads(path.read_text())
+        data["version"] = version
+        path.write_text(json.dumps(data, indent=2) + "\n")
 
 
 def main() -> None:
@@ -64,7 +66,7 @@ def main() -> None:
 
     if "--apply" in sys.argv:
         update_manifest(version)
-        print(f"Updated {MANIFEST_PATH} to {version}")
+        print(f"Updated {MANIFEST_PATH} and {TOP_MANIFEST_PATH} to {version}")
     else:
         print(version)
 

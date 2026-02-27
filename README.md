@@ -1,3 +1,11 @@
+# Watt-O-Balancer
+
+![Watt-O-Balancer logo](assets/watt_o_balancer_logo.svg)
+
+Watt-O-Balancer — Home Assistant EV Charger Load Balancing (HACS-compatible)
+
+[![HACS Default](https://img.shields.io/badge/HACS-Integration-blue)](https://hacs.xyz/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE) [![Release](https://img.shields.io/badge/release-v0.0.1-lightgrey)](#)
+
 [![HACS Validation](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/hacs-validate.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/hacs-validate.yml)
 [![Unit Tests](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
 [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Falexisml%2F7107fdc2a20719f22bc6fe9f80eba710%2Fraw%2Fev_lb_test_count.json)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
@@ -10,9 +18,12 @@
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/alexisml/ha-ev-charger-balancer/blob/main/.github/dependabot.yml)
 [![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Falexisml%2F7107fdc2a20719f22bc6fe9f80eba710%2Fraw%2Fev_lb_loc.json)](https://github.com/alexisml/ha-ev-charger-balancer)
 
-# EV Charger Load Balancing (HACS)
+Smart, local, open-source load balancing for EV chargers integrated with Home Assistant. Watt-O-Balancer dynamically allocates available household power across one or more EV chargers so multiple vehicles can charge fairly without tripping main breakers or exceeding a configured household limit.
 
-A custom Home Assistant integration (HACS) that dynamically adjusts your EV charger's charging current based on real-time household power consumption, ensuring you never exceed your electrical service limit.
+**Quick links**
+- Features: Fair dynamic power allocation, dynamic rebalancing, integration with existing charger entities, HACS-compatible.
+- Installation: HACS (recommended) or manual.
+- License: Apache 2.0
 
 ---
 
@@ -58,12 +69,38 @@ The integration watches your home's power meter. When total household consumptio
 
 ---
 
-## Quick start
+## Quick install (HACS)
 
 1. **Install** via [HACS](https://hacs.xyz/) — see [Installation & Setup](docs/documentation/installation-and-setup.md)
-2. **Configure** in Settings → Devices & Services → Add Integration → "EV Charger Load Balancing"
+2. **Configure** in Settings → Devices & Services → Add Integration → "Watt-O-Balancer"
 3. **Create action scripts** to control your charger — see [Action Scripts Guide](docs/documentation/action-scripts-guide.md)
 4. **Monitor** via dashboard sensors and [event notifications](docs/documentation/event-notifications-guide.md)
+
+---
+
+## Manual install (developer / local)
+
+1. Copy the `ev_lb` integration folder into `custom_components/ev_lb/` (the current integration domain; a future release may rename this to `watt_o_balancer`).
+2. Restart Home Assistant.
+3. Configure via the integration UI.
+
+---
+
+## Example configuration (concept)
+
+Configuration is exposed through the integration UI. Conceptually, you will:
+- Select charger entities (EV chargers or smart-plugs)
+- Provide a household maximum power limit (W)
+- Optional priorities or exclusion lists per charger
+
+---
+
+## Goals
+
+- Keep charging within household limits
+- Distribute power fairly across concurrent sessions
+- Work locally, with minimal cloud dependency
+- Play nice with Home Assistant ecosystems and HACS
 
 ---
 
@@ -72,6 +109,12 @@ The integration watches your home's power meter. When total household consumptio
 See the [Development Guide](docs/documentation/development-guide.md) for architecture, testing, CI checks, and contribution guidelines.
 
 Development artifacts (research, design decisions, PR retrospectives) are under [`docs/development-memories/`](docs/development-memories/README.md).
+
+---
+
+## License
+
+Apache 2.0 — see the [LICENSE](LICENSE) file.
 
 ---
 

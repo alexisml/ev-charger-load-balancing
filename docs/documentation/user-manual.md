@@ -1,6 +1,6 @@
-# EV Charger Load Balancing — User Documentation
+# Watt-O-Balancer — User Documentation
 
-Welcome to the documentation for the **EV Charger Load Balancing** integration for Home Assistant.
+Welcome to the documentation for the **Watt-O-Balancer** integration for Home Assistant.
 
 This integration dynamically adjusts your EV charger's charging current based on real-time household power consumption, ensuring you never exceed your electrical service limit.
 

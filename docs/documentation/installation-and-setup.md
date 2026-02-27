@@ -23,7 +23,7 @@ Before you begin, make sure you have:
 
 1. Open **HACS → Integrations → ⋮ (three dots) → Custom repositories**.
 2. Add `https://github.com/alexisml/ha-ev-charger-balancer` as an **Integration**.
-3. Search for **EV Charger Load Balancing** and click **Download**.
+3. Search for **Watt-O-Balancer** and click **Download**.
 4. **Restart Home Assistant** — the integration won't appear until you restart.
 
 ### Manual installation
@@ -53,7 +53,7 @@ flowchart LR
 ```
 
 1. Go to **Settings → Devices & Services → Add Integration**.
-2. Search for **EV Charger Load Balancing** and select it.
+2. Search for **Watt-O-Balancer** and select it.
 3. You'll see a configuration form. Here's what each field means:
 
 #### Required fields
@@ -97,7 +97,7 @@ Almost all settings can be changed at any time via the **Configure** dialog — 
 
 #### What you can change
 
-1. Go to **Settings → Devices & Services → EV Charger Load Balancing**.
+1. Go to **Settings → Devices & Services → Watt-O-Balancer**.
 2. Click the **Configure** button (gear icon).
 3. Adjust any of the following and click **Submit**. The integration reloads automatically.
 
@@ -118,7 +118,7 @@ The power meter sensor **cannot** be changed after setup. It acts as the unique 
 
 To switch to a different power meter sensor, you must **delete the integration and re-add it**:
 
-1. Go to **Settings → Devices & Services → EV Charger Load Balancing**.
+1. Go to **Settings → Devices & Services → Watt-O-Balancer**.
 2. Click the three dots (⋮) → **Delete**.
 3. Add the integration again and select the new sensor during setup.
 
@@ -143,7 +143,7 @@ After configuration, check that everything is working:
 
 ## Removing the integration
 
-1. Go to **Settings → Devices & Services → EV Charger Load Balancing**.
+1. Go to **Settings → Devices & Services → Watt-O-Balancer**.
 2. Click the three dots (⋮) → **Delete**.
 3. All entities and the device are removed. Your charger is left at whatever current was last set — the integration does not send a "reset" command on removal.
 

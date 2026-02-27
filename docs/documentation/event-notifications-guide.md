@@ -1,6 +1,6 @@
 # Event Notifications Guide
 
-This guide explains how to use the **event notifications** fired by the EV Charger Load Balancing integration to build automations — for example, sending mobile push alerts when a fault condition occurs.
+This guide explains how to use the **event notifications** fired by the Watt-O-Balancer integration to build automations — for example, sending mobile push alerts when a fault condition occurs.
 
 ## Overview
 

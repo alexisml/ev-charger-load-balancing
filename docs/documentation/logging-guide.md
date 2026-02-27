@@ -1,6 +1,6 @@
 # Logging Guide
 
-This guide explains how to use and interpret logs from the EV Charger Load Balancing integration.
+This guide explains how to use and interpret logs from the Watt-O-Balancer integration.
 
 ## Enabling debug logs
 

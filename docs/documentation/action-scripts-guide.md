@@ -1,6 +1,6 @@
 # Action Scripts Guide
 
-This guide explains how to configure the **action scripts** that allow the EV Charger Load Balancing integration to control your physical charger.
+This guide explains how to configure the **action scripts** that allow the Watt-O-Balancer integration to control your physical charger.
 
 ## Overview
 
@@ -147,13 +147,13 @@ sequence:
 
 #### During initial setup
 
-When adding the integration (Settings → Integrations → Add → EV Charger Load Balancing), you'll see optional fields for each action script. Select the scripts you created from the dropdown.
+When adding the integration (Settings → Integrations → Add → Watt-O-Balancer), you'll see optional fields for each action script. Select the scripts you created from the dropdown.
 
 #### After initial setup (Options flow)
 
 You can add, change, or remove action scripts at any time:
 
-1. Go to **Settings → Integrations → EV Charger Load Balancing**.
+1. Go to **Settings → Integrations → Watt-O-Balancer**.
 2. Click **Configure**.
 3. Update the action script selections.
 4. Click **Submit**.
@@ -325,7 +325,7 @@ Check your OCPP charger's device page in Home Assistant (**Settings → Devices 
 ### Actions are not firing
 
 1. Check that the script entities exist in **Developer Tools → Services**.
-2. Verify the scripts are selected in the integration config (Settings → Integrations → EV Charger Load Balancing → Configure).
+2. Verify the scripts are selected in the integration config (Settings → Integrations → Watt-O-Balancer → Configure).
 3. Check the Home Assistant logs for warnings about failed actions.
 
 ### Actions fire but charger doesn't respond
