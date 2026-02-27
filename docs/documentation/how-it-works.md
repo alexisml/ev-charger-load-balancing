@@ -216,7 +216,7 @@ flowchart TD
     D -- YES --> E(["stop_charging — instant"])
     D -- NO --> F{"target_a < current_a?<br/>load increased, must reduce"}
     F -- "YES — instant" --> G(["set_current(target_a)"])
-    F -- "NO — load decreased" --> H{"ramp-up cooldown elapsed?<br/>≥ ramp_up_time s since last reduction"}
+    F -- "NO — load decreased" --> H{"ramp-up cooldown elapsed?<br/>≥ ramp_up_time s since last<br/>reduction or headroom decrease"}
     H -- "YES" --> I(["set_current(target_a)"])
     H -- "NO" --> J(["hold current — wait for next cycle"])
 ```
@@ -307,7 +307,7 @@ The `sensor.*_balancer_state` diagnostic sensor tracks what the integration is d
 | `stopped` | Charger target is 0 A. | Overload, initial state, available current is below minimum, or max charger current is set to 0 A. |
 | `active` | Charger is running at a steady current. | Normal operation — target hasn't changed since last cycle. |
 | `adjusting` | Charger current just changed this cycle. | Load shifted and the integration adjusted the current. |
-| `ramp_up_hold` | An increase is needed but the ramp-up cooldown hasn't elapsed yet. | Load dropped recently but a reduction happened within the last `ramp_up_time` seconds. |
+| `ramp_up_hold` | An increase is needed but the ramp-up cooldown hasn't elapsed yet. | Load dropped recently, or headroom decreased from a usable level, within the last `ramp_up_time` seconds. Only applies when the charger is actively running. |
 | `disabled` | Load balancing switch is off. | User or automation turned off the switch. |
 
 ```mermaid
@@ -319,7 +319,7 @@ stateDiagram-v2
     state "DISABLED\nswitch off" as DISABLED
 
     [*] --> STOPPED
-    STOPPED --> ADJUSTING : headroom ≥ min_ev_a
+    STOPPED --> ADJUSTING : headroom ≥ min_ev_a\nAND cooldown elapsed
     ADJUSTING --> ACTIVE : same target next cycle
     ADJUSTING --> STOPPED : overload (target < min_ev_a)
     ADJUSTING --> RAMP_UP_HOLD : increase needed but cooldown active
