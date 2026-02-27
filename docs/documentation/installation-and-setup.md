@@ -86,7 +86,7 @@ These are **optional**. If you skip them, the integration runs in compute-only m
 | **Set current action** | A script entity that the integration calls to set the charging current on your charger. Receives `current_a` (float) and `charger_id` (string) as variables. |
 | **Stop charging action** | A script entity called to stop charging when there's not enough headroom. Receives `charger_id` (string). |
 | **Start charging action** | A script entity called to resume charging after it was stopped. Receives `charger_id` (string). |
-| **Charger status sensor** | A sensor entity whose state equals `Charging` when the EV is actively drawing current (e.g., from the OCPP integration). When configured, the balancer avoids over-subtracting headroom while the charger is idle or finished. See [Charger status sensor](how-it-works.md#charger-status-sensor-optional) for details. |
+| **Charger status sensor** | A sensor entity whose state equals `Charging` when the EV is actively drawing current. When configured, the balancer avoids over-subtracting headroom while the charger is idle or finished. If you use the [lbbrhzn/ocpp](https://github.com/lbbrhzn/ocpp) integration, use `sensor.*_status_connector`. See [Charger status sensor](how-it-works.md#charger-status-sensor-optional) for details. |
 
 > **New to action scripts?** See the [Action Scripts Guide](action-scripts-guide.md) for step-by-step instructions on creating scripts for OCPP, REST, Modbus, or switch-based chargers.
 
