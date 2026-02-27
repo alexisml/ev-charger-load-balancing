@@ -77,7 +77,7 @@ flowchart LR
 |---|---|---|
 | **Fallback current** | The current to use when meter is unavailable and mode is "Set a specific current". Always capped at the charger maximum — even if you enter 50 A and your charger max is 32 A, it will use 32 A. | `6` A |
 
-#### Optional fields — action scripts
+#### Optional fields — action scripts and charger status sensor
 
 These are **optional**. If you skip them, the integration runs in compute-only mode (sensors only, no charger commands).
 
@@ -86,6 +86,7 @@ These are **optional**. If you skip them, the integration runs in compute-only m
 | **Set current action** | A script entity that the integration calls to set the charging current on your charger. Receives `current_a` (float) and `charger_id` (string) as variables. |
 | **Stop charging action** | A script entity called to stop charging when there's not enough headroom. Receives `charger_id` (string). |
 | **Start charging action** | A script entity called to resume charging after it was stopped. Receives `charger_id` (string). |
+| **Charger status sensor** | A sensor entity whose state equals `Charging` when the EV is actively drawing current (e.g., from the OCPP integration). When configured, the balancer avoids over-subtracting headroom while the charger is idle or finished. See [Charger status sensor](how-it-works.md#charger-status-sensor-optional) for details. |
 
 > **New to action scripts?** See the [Action Scripts Guide](action-scripts-guide.md) for step-by-step instructions on creating scripts for OCPP, REST, Modbus, or switch-based chargers.
 
@@ -110,6 +111,7 @@ Almost all settings can be changed at any time via the **Configure** dialog — 
 | Set current action script | ✅ Yes |
 | Stop charging action script | ✅ Yes |
 | Start charging action script | ✅ Yes |
+| Charger status sensor | ✅ Yes |
 | **Power meter sensor** | ❌ **No** — see below |
 
 #### Changing the power meter sensor
