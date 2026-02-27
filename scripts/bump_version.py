@@ -80,15 +80,24 @@ def branch_slug(branch: str) -> str:
     non-alphanumeric characters are collapsed to a single dash, and
     leading/trailing dashes are stripped.
 
+    Purely-numeric slugs (e.g. issue-number branches like ``123``) are
+    prefixed with ``prerelease-`` to prevent the resulting tag from
+    matching the regular release ``TAG_PATTERN`` (``vYYYY.M.N``) and
+    polluting the release counter.
+
     Examples::
 
         branch_slug("feature/my-work")  -> "feature-my-work"
         branch_slug("fix/some_bug")     -> "fix-some-bug"
         branch_slug("main")             -> "main"
+        branch_slug("123")              -> "prerelease-123"
     """
     slug = branch.lower().replace("/", "-")
     slug = _BRANCH_SLUG_STRIP.sub("-", slug)
-    return _BRANCH_SLUG_TRIM.sub("", slug)
+    slug = _BRANCH_SLUG_TRIM.sub("", slug)
+    if slug.isdigit():
+        slug = f"prerelease-{slug}"
+    return slug
 
 
 def prerelease_version(branch: str) -> str:

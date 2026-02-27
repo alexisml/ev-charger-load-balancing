@@ -60,9 +60,9 @@ class TestBranchSlug:
         """Slugs never start or end with a dash, even if the raw branch name would produce one."""
         assert branch_slug("/leading-slash") == "leading-slash"
 
-    def test_numeric_branch_name_preserved(self):
-        """Branch names that are purely numeric (e.g. issue numbers) are preserved."""
-        assert branch_slug("123") == "123"
+    def test_numeric_branch_name_prefixed(self):
+        """Purely-numeric branch names (e.g. issue numbers) are prefixed with 'prerelease-' to avoid colliding with the regular release counter."""
+        assert branch_slug("123") == "prerelease-123"
 
 
 # ---------------------------------------------------------------------------
