@@ -273,7 +273,10 @@ class TestBinarySensorDefaults:
     async def test_active_binary_sensor_reflects_coordinator_state_on_startup(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Active binary sensor displays the coordinator's current state on startup rather than a previously restored stale value."""
+        """Active binary sensor displays the coordinator's current state on startup.
+
+        A previously restored stale value is overridden by the immediate sync.
+        """
         mock_restore_cache(
             hass,
             [State(_BINARY_ACTIVE, "on")],
