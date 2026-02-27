@@ -2,14 +2,13 @@
 
 Covers:
 - branch_slug: sanitises arbitrary git branch names into URL-safe slugs
-- prerelease_version: produces YYYY.M.branch-slug[.N] for a given branch, incrementing N when the base tag already exists
+- prerelease_version: produces YYYY.M.branch-slug[.N], incrementing N when the base tag exists
 - next_version: computes the next YYYY.M.N counter from existing tags
 """
 
 from __future__ import annotations
 
 import importlib.util
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -20,6 +19,8 @@ from unittest.mock import patch
 
 _SCRIPT_PATH = Path(__file__).resolve().parent.parent / "scripts" / "bump_version.py"
 _spec = importlib.util.spec_from_file_location("bump_version", _SCRIPT_PATH)
+assert _spec is not None, f"Could not load spec from {_SCRIPT_PATH}"
+assert _spec.loader is not None, "Module spec has no loader"
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
@@ -61,7 +62,10 @@ class TestBranchSlug:
         assert branch_slug("/leading-slash") == "leading-slash"
 
     def test_numeric_branch_name_prefixed(self):
-        """Purely-numeric branch names (e.g. issue numbers) are prefixed with 'prerelease-' to avoid colliding with the regular release counter."""
+        """Purely-numeric branch names (e.g. issue numbers) are prefixed with 'prerelease-'.
+
+        This prevents the resulting tag from matching TAG_PATTERN and corrupting the release counter.
+        """
         assert branch_slug("123") == "prerelease-123"
 
 
