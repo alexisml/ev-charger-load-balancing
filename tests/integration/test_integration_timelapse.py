@@ -253,6 +253,7 @@ class TestChargingTimelapseWithIsChargingSensor:
     4. Several meter updates while stopped — each below min
     5. Headroom rises above min but ramp-up cooldown still active → held
     6. Before ramp-up completes, headroom dips below min once more
+       (available dropped from above min → cooldown timer resets to T=1055)
     7. Headroom returns, ramp-up expires → charging resumes at partial
        speed (9 A, below max 16 A); sensor→Charging confirms estimate
     """
@@ -363,8 +364,10 @@ class TestChargingTimelapseWithIsChargingSensor:
         assert hass.states.get(active_id).state == "off"
         assert hass.states.get(state_id).state == STATE_STOPPED
 
-        # Several more updates while headroom is above min but cooldown active
-        for t_delta, avail in [(5.0, 10.5), (10.0, 9.0)]:
+        # Several more updates while headroom is above min but cooldown active.
+        # Values are non-decreasing: a decrease from above min would reset the
+        # cooldown timer, which would delay the expected Step 7b resume time.
+        for t_delta, avail in [(5.0, 10.5), (10.0, 11.0)]:
             mock_time = 1040.0 + t_delta
             hass.states.async_set(POWER_METER, meter_for_available(avail, 0.0))
             await hass.async_block_till_done()
@@ -374,9 +377,8 @@ class TestChargingTimelapseWithIsChargingSensor:
 
         # -------------------------------------------------------------------
         # Step 6: Before ramp-up completes, headroom dips below min again
-        # elapsed = 1055 - 1010 = 45 s < 60 s → still in cooldown
-        # available = 3 A < 6 A → stays stopped
-        # 0 A → 0 A is not a reduction so last_reduction_time is unchanged
+        # available = 3 A < 6 A (min) → stays stopped
+        # available dropped from 11 A (≥ min) → cooldown RESTARTS at T=1055
         # -------------------------------------------------------------------
         mock_time = 1055.0
         hass.states.async_set(POWER_METER, meter_for_available(3.0, 0.0))
@@ -386,8 +388,8 @@ class TestChargingTimelapseWithIsChargingSensor:
         assert hass.states.get(active_id).state == "off"
 
         # -------------------------------------------------------------------
-        # Step 7a: Headroom back above min (9 A); still in cooldown from step 2
-        # elapsed = 1065 - 1010 = 55 s < 60 s → increase still blocked
+        # Step 7a: Headroom back above min (9 A); cooldown now from step 6 (T=1055)
+        # elapsed = 1065 - 1055 = 10 s < 60 s → increase still blocked
         # -------------------------------------------------------------------
         mock_time = 1065.0
         hass.states.async_set(POWER_METER, meter_for_available(9.0, 0.0))
@@ -398,10 +400,10 @@ class TestChargingTimelapseWithIsChargingSensor:
 
         # -------------------------------------------------------------------
         # Step 7b: Ramp-up expires → charging starts at 9 A (not at max 16 A)
-        # elapsed = 1072 - 1010 = 62 s > 60 s → increase allowed
+        # elapsed = 1116 - 1055 = 61 s > 60 s → increase allowed
         # available = 9 A > min 6 A → target = 9 A < max_charger 16 A (partial speed)
         # -------------------------------------------------------------------
-        mock_time = 1072.0
+        mock_time = 1116.0
         hass.states.async_set(POWER_METER, meter_for_available(9.01, 0.0))
         await hass.async_block_till_done()
 
@@ -414,10 +416,10 @@ class TestChargingTimelapseWithIsChargingSensor:
         # Step 7c: EV acknowledges new current — sensor transitions to Charging
         # Subsequent meter reading (house=2A, EV=9A) now uses ev_estimate=9 A:
         #   non_ev = max(0, (2530/230) - 9) = 2 A → available = 30 A → target = 16 A
-        # elapsed = 1075 - 1010 = 65 s > 60 s → ramp-up allows the increase to max
+        # elapsed = 1120 - 1055 = 65 s > 60 s → ramp-up allows the increase to max
         # coordinator.ev_charging confirms the sensor state was correctly read
         # -------------------------------------------------------------------
-        mock_time = 1075.0
+        mock_time = 1120.0
         hass.states.async_set(status_entity, "Charging")
         hass.states.async_set(POWER_METER, meter_w(2.0, 9.0))  # 2530 W
         await hass.async_block_till_done()
