@@ -1,3 +1,7 @@
+# Watt-O-Balancer
+
+Watt-O-Balancer — Home Assistant EV Charger Load Balancing (HACS-compatible)
+
 [![HACS Validation](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/hacs-validate.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/hacs-validate.yml)
 [![Unit Tests](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
 [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Falexisml%2F7107fdc2a20719f22bc6fe9f80eba710%2Fraw%2Fev_lb_test_count.json)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
@@ -10,9 +14,7 @@
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/alexisml/ha-ev-charger-balancer/blob/main/.github/dependabot.yml)
 [![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Falexisml%2F7107fdc2a20719f22bc6fe9f80eba710%2Fraw%2Fev_lb_loc.json)](https://github.com/alexisml/ha-ev-charger-balancer)
 
-# EV Charger Load Balancing (HACS)
-
-A custom Home Assistant integration (HACS) that dynamically adjusts your EV charger's charging current based on real-time household power consumption, ensuring you never exceed your electrical service limit.
+Smart, local, open-source load balancing for EV chargers integrated with Home Assistant. Watt-O-Balancer dynamically allocates available household power across one or more EV chargers so multiple vehicles can charge fairly without tripping main breakers or exceeding a configured household limit.
 
 ---
 
@@ -61,7 +63,7 @@ The integration watches your home's power meter. When total household consumptio
 ## Quick start
 
 1. **Install** via [HACS](https://hacs.xyz/) — see [Installation & Setup](docs/documentation/installation-and-setup.md)
-2. **Configure** in Settings → Devices & Services → Add Integration → "EV Charger Load Balancing"
+2. **Configure** in Settings → Devices & Services → Add Integration → "Watt-O-Balancer"
 3. **Create action scripts** to control your charger — see [Action Scripts Guide](docs/documentation/action-scripts-guide.md)
 4. **Monitor** via dashboard sensors and [event notifications](docs/documentation/event-notifications-guide.md)
 

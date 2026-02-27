@@ -1,4 +1,4 @@
-# Contributing to EV Charger Load Balancing
+# Contributing to Watt-O-Balancer
 
 Thank you for your interest in contributing! This document explains how to get started, what to expect, and how to make your contribution a success.
 
