@@ -40,8 +40,9 @@ class TestOverloadWithSpikesAndRecovery:
     but the ramp-up cooldown prevents restart (state remains ``"stopped"`` —
     since the charger is at 0 A, *not* ``"ramp_up_hold"`` which only occurs
     when the charger is running and an increase is blocked).  A second spike
-    while still in the hold period does not break the state.  Final recovery
-    happens only after the cooldown fully expires.
+    while still in the hold period resets the cooldown timer (available headroom
+    decreased from above min to below it), extending the hold period.  Final
+    recovery only happens after the cooldown expires from the *last* spike.
     """
 
     async def test_stop_hold_second_spike_and_final_resume_with_actions(
@@ -112,8 +113,10 @@ class TestOverloadWithSpikesAndRecovery:
         assert float(hass.states.get(current_set_id).state) == 0.0
         assert coordinator.available_current_a < 0
 
-        # Phase 5: Ramp-up expires (31 s from original stop at T=1010) → resume
-        mock_time = 1041.0
+        # Phase 5: Ramp-up expires (31 s from second spike at T=1028) → resume
+        # The second spike reset the cooldown: available dropped from 20 A (≥ min)
+        # to −3 A, so last_reduction_time = 1028.  Resume requires 31 s from there.
+        mock_time = 1059.0
         hass.states.async_set(POWER_METER, meter_for_available(18.0, 0.0))
         await hass.async_block_till_done()
 

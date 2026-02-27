@@ -28,7 +28,7 @@ That's it. It's a reactive, real-time load balancer for a single EV charger.
 - **This does not support multiple chargers yet.** The current version supports exactly **one charger**. Only one instance of the integration can be configured. Multi-charger support with per-charger prioritization is planned for [Phase 2](milestones/02-2026-02-19-multi-charger-plan.md).
 - **This does not manage time-of-use tariffs or solar surplus directly.** The integration exclusively handles load balancing — it reacts to total metered power to prevent exceeding your service limit. However, it works well **alongside** external automations that handle these concerns. See [Combining with solar surplus or time-of-use tariffs](#combining-with-solar-surplus-or-time-of-use-tariffs) below.
 - **Current adjustments are in 1 A steps.** The integration floors all current values to whole Amps. Sub-amp precision is not supported.
-- **Increases are delayed.** After any current reduction, there's a configurable cooldown (default: 30 s, adjustable via `number.*_ramp_up_time`) before the integration allows the current to increase again. This is intentional — it prevents rapid oscillation when household load fluctuates near the service limit.
+- **Increases are delayed.** After any current reduction **or any drop in available headroom from a previously usable level**, there's a configurable cooldown (default: 30 s, adjustable via `number.*_ramp_up_time`) before the integration allows the current to increase again. This is intentional — it prevents rapid oscillation when household load fluctuates near the service limit.
 
 ### Combining with solar surplus or time-of-use tariffs
 
@@ -139,7 +139,7 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 |---|---|---|
 | `number.*_max_charger_current` | 0–80 A | The maximum current your charger can handle. The integration will never set a current higher than this. **Setting this to 0 A stops charging immediately** without running the load-balancing algorithm, and keeps it stopped until changed back to a non-zero value. Change it at runtime to temporarily limit or disable charging. |
 | `number.*_min_ev_current` | 1–32 A | The minimum current at which your charger can operate (IEC 61851 standard: 6 A for AC). If the computed target falls below this, charging stops entirely rather than running at an unsafe low current. |
-| `number.*_ramp_up_time` | 5–300 s | How many seconds the integration must wait after a current reduction before it allows the current to increase again. Lower values respond faster but risk oscillation on spiky loads. **Recommended: 20–30 s for most installations.** |
+| `number.*_ramp_up_time` | 5–300 s | How many seconds the integration must wait after a current reduction (or any drop in available headroom from a previously usable level) before it allows the current to increase again. Lower values respond faster but risk oscillation on spiky loads. **Recommended: 20–30 s for most installations.** |
 | `number.*_overload_trigger_delay` | 1–60 s | How long a continuous overload must persist before the correction loop starts. The default (2 s) absorbs most transient spikes (kettles, washing machine spin) without triggering unnecessary adjustments. |
 | `number.*_overload_loop_interval` | 1–60 s | How often the integration re-applies a correction while an overload persists. The default (5 s) ensures fast recovery even when the power meter does not report new values (e.g., meters that only send updates on value change). |
 
@@ -171,6 +171,7 @@ Every time your power meter reports a new value:
    - If target is below the minimum EV current → stop charging (instant)
    - If target is lower than current setting → reduce immediately (instant, no delay)
    - If target is higher than current setting → increase only after the ramp-up cooldown period (default: 30 s, adjustable via `number.*_ramp_up_time`)
+   - **Cooldown timer also resets** whenever available headroom drops from a previously usable level (≥ `min_ev_current`) — even when the charger is already stopped — so conditions must be stable for a full cooldown period before a restart attempt
 
 ### Advanced details
 
@@ -215,7 +216,7 @@ flowchart TD
     D -- YES --> E(["stop_charging — instant"])
     D -- NO --> F{"target_a < current_a?<br/>load increased, must reduce"}
     F -- "YES — instant" --> G(["set_current(target_a)"])
-    F -- "NO — load decreased" --> H{"ramp-up cooldown elapsed?<br/>≥ ramp_up_time s since last reduction"}
+    F -- "NO — load decreased" --> H{"ramp-up cooldown elapsed?<br/>≥ ramp_up_time s since last<br/>reduction or headroom decrease"}
     H -- "YES" --> I(["set_current(target_a)"])
     H -- "NO" --> J(["hold current — wait for next cycle"])
 ```
@@ -225,6 +226,10 @@ flowchart TD
 **Reductions are always instant** because safety comes first — if your household load spikes, the charger current must drop immediately to avoid exceeding your breaker limit.
 
 **Increases are delayed by a configurable cooldown period** (default: 30 seconds, adjustable via `number.*_ramp_up_time`) after any reduction because household loads often fluctuate. Without this cooldown, the charger would rapidly oscillate between high and low current every few seconds when load hovers near the service limit. The cooldown gives transient loads (kettles, microwaves, washing machine spin cycles) time to settle before ramping back up.
+
+The **cooldown timer resets** whenever either of these happens:
+- The commanded current drops (direct reduction).
+- Available headroom decreases from a previously usable level (≥ `min_ev_current`) — even when the charger is already stopped at 0 A. This prevents a premature restart attempt if load conditions worsen again while the charger is waiting to resume.
 
 > ⚠️ **Very low cooldown values (below ~10 s) risk instability** if your household load has frequent spikes or is unpredictable. The recommended minimum is 20–30 s for most installations.
 
@@ -302,7 +307,7 @@ The `sensor.*_balancer_state` diagnostic sensor tracks what the integration is d
 | `stopped` | Charger target is 0 A. | Overload, initial state, available current is below minimum, or max charger current is set to 0 A. |
 | `active` | Charger is running at a steady current. | Normal operation — target hasn't changed since last cycle. |
 | `adjusting` | Charger current just changed this cycle. | Load shifted and the integration adjusted the current. |
-| `ramp_up_hold` | An increase is needed but the ramp-up cooldown hasn't elapsed yet. | Load dropped recently but a reduction happened within the last `ramp_up_time` seconds. |
+| `ramp_up_hold` | An increase is needed but the ramp-up cooldown hasn't elapsed yet. | Load dropped recently, or headroom decreased from a usable level, within the last `ramp_up_time` seconds. Only applies when the charger is actively running. |
 | `disabled` | Load balancing switch is off. | User or automation turned off the switch. |
 
 ```mermaid
@@ -314,7 +319,7 @@ stateDiagram-v2
     state "DISABLED\nswitch off" as DISABLED
 
     [*] --> STOPPED
-    STOPPED --> ADJUSTING : headroom ≥ min_ev_a
+    STOPPED --> ADJUSTING : headroom ≥ min_ev_a\nAND cooldown elapsed
     ADJUSTING --> ACTIVE : same target next cycle
     ADJUSTING --> STOPPED : overload (target < min_ev_a)
     ADJUSTING --> RAMP_UP_HOLD : increase needed but cooldown active
