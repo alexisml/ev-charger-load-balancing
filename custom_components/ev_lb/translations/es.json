@@ -16,7 +16,7 @@
           "charger_status_entity": "Sensor de estado del cargador (opcional)"
         },
         "data_description": {
-          "power_meter_entity": "Entidad de sensor que reporta el consumo eléctrico total del hogar en Watts.",
+          "power_meter_entity": "Entidad de sensor que reporta la potencia total del servicio en Watts.",
           "voltage": "Voltaje nominal de suministro en Volts (usado para convertir W ↔ A).",
           "max_service_current": "Capacidad del interruptor principal en Amperes. La carga nunca excederá este límite. Puedes configurar un valor menor que la capacidad real del interruptor para reservar un margen de seguridad — por ejemplo, ingresa 28 A en un servicio de 32 A para dejar 4 A libres para otros consumos.",
           "action_stop_charging": "Entidad de script para detener la carga cuando no hay suficiente capacidad disponible. Recibe una variable 'charger_id'.",

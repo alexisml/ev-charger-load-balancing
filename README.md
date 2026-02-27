@@ -18,7 +18,7 @@ Watt-O-Balancer — Home Assistant EV Charger Load Balancing (HACS-compatible)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/alexisml/ha-ev-charger-balancer/blob/main/.github/dependabot.yml)
 [![Lines of Code](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2Falexisml%2F7107fdc2a20719f22bc6fe9f80eba710%2Fraw%2Fev_lb_loc.json)](https://github.com/alexisml/ha-ev-charger-balancer)
 
-Smart, local, open-source load balancing for EV chargers integrated with Home Assistant. Watt-O-Balancer dynamically allocates available household power across one or more EV chargers so multiple vehicles can charge fairly without tripping main breakers or exceeding a configured household limit.
+Smart, local, open-source load balancing for EV chargers integrated with Home Assistant. Watt-O-Balancer dynamically allocates available service power across one or more EV chargers so multiple vehicles can charge fairly without tripping main breakers or exceeding a configured service limit.
 
 **Quick links**
 - Features: Fair dynamic power allocation, dynamic rebalancing, integration with existing charger entities, HACS-compatible.
@@ -37,7 +37,7 @@ Smart, local, open-source load balancing for EV chargers integrated with Home As
 
 ## What it does
 
-The integration watches your home's power meter. When total household consumption changes, it instantly recalculates how much current your EV charger can safely use without tripping your main breaker. If load goes up, charger current goes down — **immediately**. If load goes down, charger current goes back up — after a short cooldown to prevent oscillation.
+The integration watches your home's power meter. When total service power changes, it instantly recalculates how much current your EV charger can safely use without tripping your service limit. If load goes up, charger current goes down — **immediately**. If load goes down, charger current goes back up — after a short cooldown to prevent oscillation.
 
 **How it works — in four steps:**
 
@@ -99,14 +99,14 @@ The integration watches your home's power meter. When total household consumptio
 
 Configuration is exposed through the integration UI. Conceptually, you will:
 - Select charger entities (EV chargers or smart-plugs)
-- Provide a household maximum power limit (W)
+- Provide a service maximum power limit (W)
 - Optional priorities or exclusion lists per charger
 
 ---
 
 ## Goals
 
-- Keep charging within household limits
+- Keep charging within service limits
 - Distribute power fairly across concurrent sessions
 - Work locally, with minimal cloud dependency
 - Play nice with Home Assistant ecosystems and HACS

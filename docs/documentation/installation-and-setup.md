@@ -10,7 +10,7 @@ Before you begin, make sure you have:
 
 - **Home Assistant 2023.6 or later** (Core, OS, or Container install)
 - **[HACS](https://hacs.xyz/) 2.0 or later** for installing the integration
-- **A power meter sensor** — any `sensor.*` entity in Home Assistant that reports your total household power consumption in Watts
+- **A power meter sensor** — any `sensor.*` entity in Home Assistant that reports your total service power in Watts
 - **An EV charger you can control** — via [lbbrhzn/ocpp](https://github.com/lbbrhzn/ocpp), Modbus, REST API, or any charger controllable through Home Assistant scripts
 
 > **Don't have a controllable charger?** The integration can still run in "compute-only" mode — it calculates the optimal charging current and exposes it as a sensor, but does not send any commands. You can use this to test, prototype dashboards, or build your own automations around the computed value.
@@ -60,9 +60,9 @@ flowchart LR
 
 | Field | What it is | What to enter | Default |
 |---|---|---|---|
-| **Power meter sensor** | The sensor that reports your total household power consumption in Watts. This is the main input the integration uses to compute available headroom. | Select any `sensor.*` entity that reports power in W. This is typically your main electricity meter, a CT clamp sensor, or a smart meter integration. | *(required — no default)* |
+| **Power meter sensor** | The sensor that reports your total service power in Watts. This is the main input the integration uses to compute available headroom. | Select any `sensor.*` entity that reports power in W. This is typically your main electricity meter, a CT clamp sensor, or a smart meter integration. | *(required — no default)* |
 | **Supply voltage** | Your nominal mains voltage. Used to convert between Watts and Amps. | Enter `230` for most of Europe, `240` for UK/Australia, or `120` for North America. | `230` V |
-| **Max service current** | Your whole-house breaker rating (main fuse). The integration will **never** allow total consumption to exceed this. You can set this **lower than your actual breaker rating** to keep a permanent safety margin — for example, enter 28 A on a 32 A service to always reserve 4 A for other loads. | Check your main breaker or electrical panel. Common values: 25 A, 32 A, 40 A, 63 A. | `32` A |
+| **Max service current** | Your service current limit. The integration will **never** allow total consumption to exceed this. You can set this **lower than your actual breaker rating** to keep a permanent safety margin — for example, enter 28 A on a 32 A service to always reserve 4 A for other loads. It can also represent a subcircuit or any custom power budget. | Check your main breaker or electrical panel. Common values: 25 A, 32 A, 40 A, 63 A. | `32` A |
 | **When power meter is unavailable** | What should happen if your power meter sensor stops reporting (goes `unavailable` or `unknown`). | Choose one of three options — see below. | `Stop charging` |
 
 #### Unavailable behavior options
@@ -137,7 +137,7 @@ After configuration, check that everything is working:
    - `sensor.*_balancer_state` — should show `stopped` (if available current is below minimum) or `active`/`adjusting` (if there's enough headroom).
    - `binary_sensor.*_power_meter_status` — should be **On** (meter is reporting data).
 
-3. **Test the reaction:** If you have action scripts configured, try changing your household load (turn on a high-power appliance like a kettle or oven) and watch the `sensor.*_charging_current_set` value change in real time.
+3. **Test the reaction:** If you have action scripts configured, try changing your service load (turn on a high-power appliance like a kettle or oven) and watch the `sensor.*_charging_current_set` value change in real time.
 
 > **Tip:** You can also check **Developer Tools → States** and filter by `ev_lb` to see all entity states at a glance.
 
