@@ -6,7 +6,7 @@ This guide explains what the integration does, what you can expect from it, what
 
 ## The short version
 
-The integration watches your home's power meter. When your total household power consumption changes, it instantly recalculates how much current your EV charger can safely use without exceeding your main breaker limit. If the load goes up, the charger current goes down — immediately. If the load goes down, the charger current goes back up — after a short cooldown to prevent oscillation.
+The integration watches your home's power meter. When your total service power changes, it instantly recalculates how much current your EV charger can safely use without exceeding your service limit. If the load goes up, the charger current goes down — immediately. If the load goes down, the charger current goes back up — after a short cooldown to prevent oscillation.
 
 That's it. It's a reactive, real-time load balancer for a single EV charger.
 
@@ -28,7 +28,7 @@ That's it. It's a reactive, real-time load balancer for a single EV charger.
 - **This does not support multiple chargers yet.** The current version supports exactly **one charger**. Only one instance of the integration can be configured. Multi-charger support with per-charger prioritization is planned for [Phase 2](milestones/02-2026-02-19-multi-charger-plan.md).
 - **This does not manage time-of-use tariffs or solar surplus directly.** The integration exclusively handles load balancing — it reacts to total metered power to prevent exceeding your service limit. However, it works well **alongside** external automations that handle these concerns. See [Combining with solar surplus or time-of-use tariffs](#combining-with-solar-surplus-or-time-of-use-tariffs) below.
 - **Current adjustments are in 1 A steps.** The integration floors all current values to whole Amps. Sub-amp precision is not supported.
-- **Increases are delayed.** After any current reduction **or any drop in available headroom from a previously usable level**, there's a configurable cooldown (default: 30 s, adjustable via `number.*_ramp_up_time`) before the integration allows the current to increase again. This is intentional — it prevents rapid oscillation when household load fluctuates near the service limit.
+- **Increases are delayed.** After any current reduction **or any drop in available headroom from a previously usable level**, there's a configurable cooldown (default: 30 s, adjustable via `number.*_ramp_up_time`) before the integration allows the current to increase again. This is intentional — it prevents rapid oscillation when service load fluctuates near the service limit.
 
 ### Combining with solar surplus or time-of-use tariffs
 
@@ -119,7 +119,7 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 |---|---|---|
 | `sensor.*_charging_current_set` | Measurement (A) | The charging current the integration last sent to the charger. Shows `0` when charging is stopped. This is what your charger *should* be doing. |
 | `sensor.*_power_set` | Measurement (W) | The charging power the integration last sent to the charger, derived from `charging_current_set × voltage`. Shows `0` when charging is stopped. |
-| `sensor.*_available_current` | Measurement (A) | The maximum current the EV can safely draw right now given the non-EV household load. The charging current set is always ≤ this value. |
+| `sensor.*_available_current` | Measurement (A) | The maximum current the EV can safely draw right now given the non-EV service load. The charging current set is always ≤ this value. |
 | `sensor.*_last_action_reason` | Diagnostic | Why the last recomputation happened. Values: `power_meter_update` (normal), `manual_override`, `fallback_unavailable`, `parameter_change`. |
 | `sensor.*_balancer_state` | Diagnostic | The integration's operational state right now — see [Balancer states](#balancer-states) below. |
 | `sensor.*_configured_fallback` | Diagnostic | What the integration is configured to do when the meter goes unavailable: `stop`, `ignore`, or `set_current`. |
@@ -163,10 +163,11 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 
 Every time your power meter reports a new value:
 
-1. **Calculate non-EV load:** Subtract the EV's estimated draw from the whole-house meter reading to isolate how much the rest of your home is consuming.
-   - `non_ev_w = max(0, house_power_w − current_ev_a × voltage)`
+1. **Calculate non-EV load:** Subtract the EV's estimated draw from the service meter reading to isolate how much the rest of your service is consuming.
+   - `non_ev_w = max(0, service_power_w − current_ev_a × voltage)`
 2. **Calculate target:** What is the maximum current the EV can safely draw?
    - `available_a = max_service_a − non_ev_w / voltage` (capped at charger maximum)
+   - **Tip:** `max_service_a` is whatever you entered in the configuration — you can set it lower than your actual breaker rating to keep a permanent safety margin. There is no separate "margin" setting; just configure the limit you want enforced.
 3. **Apply safety rules:**
    - If target is below the minimum EV current → stop charging (instant)
    - If target is lower than current setting → reduce immediately (instant, no delay)
@@ -223,15 +224,15 @@ flowchart TD
 
 #### Why instant down, delayed up?
 
-**Reductions are always instant** because safety comes first — if your household load spikes, the charger current must drop immediately to avoid exceeding your breaker limit.
+**Reductions are always instant** because safety comes first — if your service load spikes, the charger current must drop immediately to avoid exceeding your service limit.
 
-**Increases are delayed by a configurable cooldown period** (default: 30 seconds, adjustable via `number.*_ramp_up_time`) after any reduction because household loads often fluctuate. Without this cooldown, the charger would rapidly oscillate between high and low current every few seconds when load hovers near the service limit. The cooldown gives transient loads (kettles, microwaves, washing machine spin cycles) time to settle before ramping back up.
+**Increases are delayed by a configurable cooldown period** (default: 30 seconds, adjustable via `number.*_ramp_up_time`) after any reduction because service loads often fluctuate. Without this cooldown, the charger would rapidly oscillate between high and low current every few seconds when load hovers near the service limit. The cooldown gives transient loads (kettles, microwaves, washing machine spin cycles) time to settle before ramping back up.
 
 The **cooldown timer resets** whenever either of these happens:
 - The commanded current drops (direct reduction).
 - Available headroom decreases from a previously usable level (≥ `min_ev_current`) — even when the charger is already stopped at 0 A. This prevents a premature restart attempt if load conditions worsen again while the charger is waiting to resume.
 
-> ⚠️ **Very low cooldown values (below ~10 s) risk instability** if your household load has frequent spikes or is unpredictable. The recommended minimum is 20–30 s for most installations.
+> ⚠️ **Very low cooldown values (below ~10 s) risk instability** if your service load has frequent spikes or is unpredictable. The recommended minimum is 20–30 s for most installations.
 
 ---
 
