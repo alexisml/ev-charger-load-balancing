@@ -8,7 +8,7 @@ This guide helps you diagnose problems, understand what the integration is doing
 
 Before diving into specifics, run through this checklist:
 
-- [ ] Is the integration loaded? Check **Settings → Devices & Services** — do you see "EV Charger Load Balancing"?
+- [ ] Is the integration loaded? Check **Settings → Devices & Services** — do you see "Watt-O-Balancer"?
 - [ ] Is the power meter sensor reporting valid values? Check **Developer Tools → States** and search for your meter entity.
 - [ ] Is load balancing enabled? Check `switch.*_load_balancing_enabled` — is it **On**?
 - [ ] Are your action scripts working independently? Test them from **Developer Tools → Services**.
@@ -39,7 +39,7 @@ flowchart TD
 
 ### The integration does not appear in Add Integration
 
-**Symptoms:** You search for "EV Charger Load Balancing" in Add Integration but nothing comes up.
+**Symptoms:** You search for "Watt-O-Balancer" in Add Integration but nothing comes up.
 
 **Causes and fixes:**
 1. **Integration not installed.** Verify the `custom_components/ev_lb/` folder exists in your HA config directory (usually `/config/custom_components/ev_lb/`).
@@ -48,7 +48,7 @@ flowchart TD
 
 ### "Already configured" error
 
-**Symptoms:** When trying to add the integration, you see "EV Charger Load Balancing is already configured."
+**Symptoms:** When trying to add the integration, you see "Watt-O-Balancer is already configured."
 
 **Cause:** The integration supports only one instance. It's already set up.
 
@@ -68,7 +68,7 @@ flowchart TD
 **Symptoms:** The integration is running and sensors show changing values, but your charger doesn't actually change its current.
 
 **Steps to diagnose:**
-1. **Check if scripts are configured.** Go to **Settings → Devices & Services → EV Charger Load Balancing → Configure**. Are the action script fields filled in?
+1. **Check if scripts are configured.** Go to **Settings → Devices & Services → Watt-O-Balancer → Configure**. Are the action script fields filled in?
 2. **Test scripts independently.** Go to **Developer Tools → Services**, search for your script (e.g., `script.ev_lb_set_current`), provide test variables (`current_a: 10`, `charger_id: test`), and run it. Does the charger respond?
 3. **Check for warnings.** Look in **Settings → System → Logs** for messages like `Action set_current failed via script.*`.
 4. **Verify your charger integration.** The problem may be in your charger integration (OCPP, Modbus, etc.), not in this integration. Test the charger integration independently.
@@ -239,7 +239,7 @@ See the [Event Notifications Guide](event-notifications-guide.md) for payloads a
 When filing a bug report on [GitHub](https://github.com/alexisml/ha-ev-charger-balancer/issues), include:
 
 1. **Home Assistant version** (Settings → About).
-2. **Integration version** (Settings → Devices & Services → EV Charger Load Balancing → version).
+2. **Integration version** (Settings → Devices & Services → Watt-O-Balancer → version).
 3. **Debug logs** covering the problem (see [Enabling debug logs](#enabling-debug-logs) above).
 4. **Entity states** at the time of the issue (screenshot from Developer Tools → States, filtered by `ev_lb`).
 5. **Your configuration** — power meter entity, voltage, service current, unavailable behavior, action scripts.

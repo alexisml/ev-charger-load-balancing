@@ -4,7 +4,7 @@
 
 Watt-O-Balancer — Home Assistant EV Charger Load Balancing (HACS-compatible)
 
-[![HACS Default](https://img.shields.io/badge/HACS-Integration-blue)](https://hacs.xyz/) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE) [![Release](https://img.shields.io/badge/release-v0.0.1-lightgrey)](#)
+[![HACS Default](https://img.shields.io/badge/HACS-Integration-blue)](https://hacs.xyz/) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE) [![Release](https://img.shields.io/badge/release-v0.0.1-lightgrey)](#)
 
 [![HACS Validation](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/hacs-validate.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/hacs-validate.yml)
 [![Unit Tests](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml/badge.svg)](https://github.com/alexisml/ha-ev-charger-balancer/actions/workflows/tests.yml)
@@ -21,9 +21,9 @@ Watt-O-Balancer — Home Assistant EV Charger Load Balancing (HACS-compatible)
 Smart, local, open-source load balancing for EV chargers integrated with Home Assistant. Watt-O-Balancer dynamically allocates available household power across one or more EV chargers so multiple vehicles can charge fairly without tripping main breakers or exceeding a configured household limit.
 
 **Quick links**
-- Features: Fair per-session watt allocation, dynamic rebalancing, integration with existing charger entities, HACS-compatible.
+- Features: Fair dynamic power allocation, dynamic rebalancing, integration with existing charger entities, HACS-compatible.
 - Installation: HACS (recommended) or manual.
-- License: MIT
+- License: Apache 2.0
 
 ---
 
@@ -114,7 +114,7 @@ Development artifacts (research, design decisions, PR retrospectives) are under 
 
 ## License
 
-MIT — see the [LICENSE](LICENSE) file.
+Apache 2.0 — see the [LICENSE](LICENSE) file.
 
 ---
 
