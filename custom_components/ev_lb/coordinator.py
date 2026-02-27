@@ -904,8 +904,9 @@ class EvLoadBalancerCoordinator:
                 current_w=current_w,
             )
 
-        # Refresh diagnostic sensors after actions complete (the initial
-        # dispatcher signal is sent before actions run in the background).
+        # Refresh diagnostic sensors after actions complete — the initial
+        # dispatcher signal is sent by _update_and_notify() before actions
+        # are scheduled as a background task via async_create_task().
         async_dispatcher_send(self.hass, self.signal_update)
 
     async def _call_action(

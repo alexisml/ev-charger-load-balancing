@@ -1,20 +1,15 @@
 """Tests for the action retry/backoff logic and diagnostic sensors.
 
 Tests cover:
-- Retry with exponential backoff: failed actions are retried up to ACTION_MAX_RETRIES times
-- Backoff timing: retry delays follow exponential pattern (1s, 2s, 4s)
-- Successful retry: action succeeds on a later attempt after initial failure
-- All retries exhausted: event fired, persistent notification created, error recorded
-- Diagnostic state: last_action_error records the failure reason after retries exhausted
-- Diagnostic state: last_action_timestamp records the ISO timestamp of each action
-- Success clears error: last_action_error is cleared after a successful action
-- Notification dismissed on success: action-failed notification is dismissed on recovery
-- Diagnostic sensors: last_action_error and last_action_timestamp sensors reflect coordinator state
+- Charger commands are retried automatically when they fail, with increasing delays
+- Charger responds normally after transient communication errors
+- Failure is reported only after all automatic retry attempts are exhausted
+- Error indicators disappear and failure alerts clear when charger commands succeed again
+- Diagnostic dashboard shows error details and timing for debugging charger issues
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
@@ -31,20 +26,13 @@ from custom_components.ev_lb.const import (
 )
 from conftest import (
     POWER_METER,
-    SET_CURRENT_SCRIPT,
     setup_integration,
     collect_events,
     get_entity_id,
+    no_sleep_coordinator,
     PN_CREATE,
     PN_DISMISS,
 )
-
-
-def _no_sleep_coordinator(hass, entry):
-    """Return the coordinator with sleep replaced by a no-op for fast tests."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    coordinator._sleep_fn = AsyncMock()
-    return coordinator
 
 
 # ---------------------------------------------------------------------------
@@ -60,9 +48,9 @@ class TestRetryBackoff:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Error is recorded and event fires only after all retry attempts are exhausted."""
+        """Charger control failure is reported after automatic retries are exhausted."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        coordinator = _no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        coordinator = no_sleep_coordinator(hass, mock_config_entry_with_actions)
         events = collect_events(hass, EVENT_ACTION_FAILED)
 
         with patch(
@@ -86,9 +74,9 @@ class TestRetryBackoff:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Retry delays follow an exponential pattern (1s, 2s, 4s)."""
+        """Failed charger commands are retried with increasing delays before giving up."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        coordinator = _no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        coordinator = no_sleep_coordinator(hass, mock_config_entry_with_actions)
 
         with patch(
             "homeassistant.core.ServiceRegistry.async_call",
@@ -112,9 +100,9 @@ class TestRetryBackoff:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Action succeeds on a later attempt when the first call fails transiently."""
+        """Charger responds successfully after transient communication errors."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        coordinator = _no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        coordinator = no_sleep_coordinator(hass, mock_config_entry_with_actions)
         events = collect_events(hass, EVENT_ACTION_FAILED)
 
         call_count = 0
@@ -145,9 +133,9 @@ class TestRetryBackoff:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Each action is attempted exactly 1 + ACTION_MAX_RETRIES times before giving up."""
+        """Charger control attempts stop after the configured number of retries."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        coordinator = _no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        coordinator = no_sleep_coordinator(hass, mock_config_entry_with_actions)
 
         call_count = 0
 
@@ -175,16 +163,16 @@ class TestRetryBackoff:
 
 
 class TestSuccessClearsError:
-    """Successful charger action clears the last error and dismisses the failure notification."""
+    """Error indicators and failure alerts automatically clear when charger commands succeed again."""
 
     async def test_success_clears_last_action_error(
         self,
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Error diagnostic is cleared after a subsequent successful action execution."""
+        """Error indicators disappear when charger commands succeed again."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        coordinator = _no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        coordinator = no_sleep_coordinator(hass, mock_config_entry_with_actions)
 
         # Step 1: Cause a failure
         with patch(
@@ -209,9 +197,9 @@ class TestSuccessClearsError:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Action-failed persistent notification is dismissed when a subsequent action succeeds."""
+        """Failure alerts automatically disappear from the dashboard after charger recovers."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        coordinator = _no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        coordinator = no_sleep_coordinator(hass, mock_config_entry_with_actions)
 
         # Step 1: Cause a failure to create the notification
         with patch(PN_CREATE), patch(PN_DISMISS), patch(
@@ -240,14 +228,14 @@ class TestSuccessClearsError:
 
 
 class TestDiagnosticSensors:
-    """Diagnostic sensors expose action error and timestamp for debugging."""
+    """Diagnostic dashboard shows error details and timing for debugging charger issues."""
 
     async def test_last_action_error_sensor_defaults_to_none(
         self,
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Error sensor shows no error when no actions have failed."""
+        """No error is displayed when charger operations are functioning normally."""
         await setup_integration(hass, mock_config_entry_with_actions)
 
         sensor_id = get_entity_id(
@@ -263,7 +251,7 @@ class TestDiagnosticSensors:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Timestamp sensor shows no timestamp when no actions have executed."""
+        """Last action time is unavailable before any charger commands are issued."""
         await setup_integration(hass, mock_config_entry_with_actions)
 
         sensor_id = get_entity_id(
@@ -278,9 +266,9 @@ class TestDiagnosticSensors:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Error sensor displays the failure reason after all retry attempts are exhausted."""
+        """Failure details are available for debugging when charger commands cannot be executed."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        _no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        no_sleep_coordinator(hass, mock_config_entry_with_actions)
 
         with patch(
             "homeassistant.core.ServiceRegistry.async_call",
@@ -301,7 +289,7 @@ class TestDiagnosticSensors:
         hass: HomeAssistant,
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
-        """Timestamp sensor records the time of the last successful action execution."""
+        """Last successful command time is displayed for monitoring charger activity."""
         calls = async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
 
