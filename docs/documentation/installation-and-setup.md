@@ -62,7 +62,7 @@ flowchart LR
 |---|---|---|---|
 | **Power meter sensor** | The sensor that reports your total household power consumption in Watts. This is the main input the integration uses to compute available headroom. | Select any `sensor.*` entity that reports power in W. This is typically your main electricity meter, a CT clamp sensor, or a smart meter integration. | *(required — no default)* |
 | **Supply voltage** | Your nominal mains voltage. Used to convert between Watts and Amps. | Enter `230` for most of Europe, `240` for UK/Australia, or `120` for North America. | `230` V |
-| **Max service current** | Your whole-house breaker rating (main fuse). The integration will **never** allow total consumption to exceed this. | Check your main breaker or electrical panel. Common values: 25 A, 32 A, 40 A, 63 A. | `32` A |
+| **Max service current** | Your whole-house breaker rating (main fuse). The integration will **never** allow total consumption to exceed this. You can set this **lower than your actual breaker rating** to keep a permanent safety margin — for example, enter 28 A on a 32 A service to always reserve 4 A for other loads. | Check your main breaker or electrical panel. Common values: 25 A, 32 A, 40 A, 63 A. | `32` A |
 | **When power meter is unavailable** | What should happen if your power meter sensor stops reporting (goes `unavailable` or `unknown`). | Choose one of three options — see below. | `Stop charging` |
 
 #### Unavailable behavior options

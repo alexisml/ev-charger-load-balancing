@@ -18,10 +18,7 @@
         "data_description": {
           "power_meter_entity": "Sensor entity that reports total household power consumption in Watts.",
           "voltage": "Nominal supply voltage in Volts (used to convert W ↔ A).",
-          "max_service_current": "Whole-house breaker rating in Amps. Charging will never exceed this limit.",
-          "unavailable_behavior": "What to do when the power meter becomes unavailable: stop charging (safest), ignore and keep last value, or set a specific current (capped at the charger maximum).",
-          "unavailable_fallback_current": "Charging current (A) to use when the meter is unavailable and mode is 'Set a specific current'. This value will be capped at the charger maximum.",
-          "action_set_current": "Script entity called to set the charging current. Receives 'current_a' (amps), 'current_w' (watts), and 'charger_id' variables.",
+          "max_service_current": "Whole-house breaker rating in Amps. Charging will never exceed this limit. You can set this lower than your actual breaker rating to reserve a safety margin — for example, enter 28 A on a 32 A service to keep 4 A free for other loads.",
           "action_stop_charging": "Script entity called to stop charging when headroom is insufficient. Receives a 'charger_id' variable.",
           "action_start_charging": "Script entity called to start/resume charging after it was stopped. Receives a 'charger_id' variable.",
           "charger_status_entity": "Sensor whose state equals 'Charging' when the EV is actively charging (e.g. from the OCPP integration). When set, the balancer uses this to avoid over-subtracting headroom while the charger is idle or finished."
@@ -52,7 +49,7 @@
         },
         "data_description": {
           "voltage": "Nominal supply voltage in Volts (used to convert W ↔ A).",
-          "max_service_current": "Whole-house breaker rating in Amps. Charging will never exceed this limit.",
+          "max_service_current": "Whole-house breaker rating in Amps. Charging will never exceed this limit. You can set this lower than your actual breaker rating to reserve a safety margin — for example, enter 28 A on a 32 A service to keep 4 A free for other loads.",
           "unavailable_behavior": "What to do when the power meter becomes unavailable: stop charging (safest), ignore and keep last value, or set a specific current (capped at the charger maximum).",
           "unavailable_fallback_current": "Charging current (A) to use when the meter is unavailable and mode is 'Set a specific current'. This value will be capped at the charger maximum.",
           "action_set_current": "Script entity called to set the charging current. Receives 'current_a' (float, amps), 'current_w' (float, watts), and 'charger_id' (string) variables.",

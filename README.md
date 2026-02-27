@@ -39,6 +39,15 @@ Smart, local, open-source load balancing for EV chargers integrated with Home As
 
 The integration watches your home's power meter. When total household consumption changes, it instantly recalculates how much current your EV charger can safely use without tripping your main breaker. If load goes up, charger current goes down — **immediately**. If load goes down, charger current goes back up — after a short cooldown to prevent oscillation.
 
+**How it works — in four steps:**
+
+1. Read total household power from the meter.
+2. Subtract the EV's estimated draw to isolate non-EV load: `non_ev_w = house_w − ev_a × V`
+3. Calculate available headroom: `available_a = service_limit_a − non_ev_w / V`
+4. Set the charger to `min(available_a, charger_max_a)` — reductions are instant, increases wait for a configurable cooldown.
+
+> **Headroom tip:** `service_limit_a` is exactly what you enter in the configuration. Set it lower than your actual breaker rating to leave a permanent safety margin — for example, configure 28 A on a 32 A service to keep 4 A free for other loads. There is no separate margin setting; you control the limit directly.
+
 **Key features:**
 - **Automatic load balancing** — adjusts charger current in real time based on your power meter
 - **Safety-first** — reductions are instant; default behavior stops charging if the meter goes offline

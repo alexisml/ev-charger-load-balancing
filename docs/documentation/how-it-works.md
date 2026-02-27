@@ -167,6 +167,7 @@ Every time your power meter reports a new value:
    - `non_ev_w = max(0, house_power_w − current_ev_a × voltage)`
 2. **Calculate target:** What is the maximum current the EV can safely draw?
    - `available_a = max_service_a − non_ev_w / voltage` (capped at charger maximum)
+   - **Tip:** `max_service_a` is whatever you entered in the configuration — you can set it lower than your actual breaker rating to keep a permanent safety margin. There is no separate "margin" setting; just configure the limit you want enforced.
 3. **Apply safety rules:**
    - If target is below the minimum EV current → stop charging (instant)
    - If target is lower than current setting → reduce immediately (instant, no delay)
