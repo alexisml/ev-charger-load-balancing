@@ -251,7 +251,7 @@ Together, these ensure that even a noisy power meter producing many updates per 
 
 ##### Tuning recommendations by installation type
 
-The defaults work well for most setups. If you need to adjust them, use the guidelines below.
+The defaults work well for most setups. If you need to adjust them, use the guidelines below. All three timing parameters are available as Number entities (`number.*_ramp_up_time`, `number.*_overload_trigger_delay`, `number.*_overload_loop_interval`) and can be changed at any time from the device page — see the [runtime-tunable parameters](#runtime-tunable-parameters) table above.
 
 | Installation scenario | Ramp-up cooldown | Overload trigger delay | Overload loop interval | Notes |
 |---|---|---|---|---|
@@ -262,7 +262,7 @@ The defaults work well for most setups. If you need to adjust them, use the guid
 | **Stable loads, fast charger** (solar-only, no variable house loads) | 10–15 s | 1–2 s | 3–5 s | Lower cooldown allows quicker ramp-up when there are few transient spikes. |
 
 **About breakers and RCDs:**
-- **MCBs (miniature circuit breakers)** have thermal trip times of minutes to hours for moderate overloads (1.13–1.45× rated current). The default 2 s trigger delay is well within safe thermal limits. Setting `max_service_current` below the MCB rating is the primary safety measure — the timers are about comfort and stability, not breaker protection.
+- **MCBs (miniature circuit breakers)** have thermal trip times of minutes to hours for moderate overloads (1.13–1.45× rated current). The default 2 s trigger delay is well within safe thermal limits. Setting `max_service_current` below the MCB rating is the primary safety measure. Faster timing does not replace proper current limits, but it can improve system stability when operating close to those limits (e.g., tight-margin installations).
 - **RCDs / GFCIs** (30 mA Type A/AC) protect against earth-leakage faults, not overcurrent. They do not affect these timing parameters.
 - **Type 2 SPDs** and other surge protection devices are not influenced by these settings.
 
