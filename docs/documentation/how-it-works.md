@@ -234,6 +234,21 @@ The **cooldown timer resets** whenever either of these happens:
 
 > ⚠️ **Very low cooldown values (below ~10 s) risk instability** if your service load has frequent spikes or is unpredictable. The recommended minimum is 20–30 s for most installations.
 
+#### Built-in throttling and debounce
+
+The integration includes several mechanisms that limit how often charger commands are sent, without requiring any additional configuration:
+
+| Mechanism | What it throttles | Default | Configurable via |
+|---|---|---|---|
+| **Ramp-up cooldown** | Current *increases* after any reduction or headroom drop | 30 s | `number.*_ramp_up_time` (5–300 s) |
+| **Overload trigger delay** | Overload corrections — transient spikes are absorbed | 2 s | `number.*_overload_trigger_delay` (1–60 s) |
+| **Overload loop interval** | Re-corrections while an overload persists | 5 s | `number.*_overload_loop_interval` (1–60 s) |
+| **Action coalescing** | Redundant charger commands — actions only fire when the target current actually changes (start, stop, or new value) | Always on | — |
+
+Together, these ensure that even a noisy power meter producing many updates per second will not flood your charger with commands. Current *reductions* are always applied instantly for safety — throttling a safety-critical decrease could allow the service limit to be exceeded.
+
+> **Why no meter smoothing?** The integration does not apply a moving average or windowed filter to the power meter input. Smoothing would delay the detection of real overloads, which conflicts with the safety-first design. Instead, the integration reacts instantly to every meter reading and uses the mechanisms above to throttle the *output* (charger commands) rather than filtering the *input* (meter values).
+
 ---
 
 ## Charger status sensor (optional)
