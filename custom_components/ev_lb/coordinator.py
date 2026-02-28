@@ -12,9 +12,10 @@ on every state transition.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timezone, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
@@ -28,6 +29,8 @@ from homeassistant.components.persistent_notification import (
 )
 
 from .const import (
+    ACTION_MAX_RETRIES,
+    ACTION_RETRY_BASE_DELAY_S,
     CONF_ACTION_SET_CURRENT,
     CONF_ACTION_START_CHARGING,
     CONF_ACTION_STOP_CHARGING,
@@ -126,9 +129,19 @@ class EvLoadBalancerCoordinator:
         self.configured_fallback: str = self._unavailable_behavior
         self.ev_charging: bool = True
 
+        # Action diagnostic state (read by diagnostic sensors)
+        self.last_action_error: str | None = None
+        self.last_action_timestamp: datetime | None = None
+
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None
         self._time_fn = time.monotonic
+
+        # Async sleep function — injectable for testing
+        self._sleep_fn = asyncio.sleep
+
+        # Current action-execution task — cancelled when a new cycle starts
+        self._action_task: asyncio.Task[None] | None = None
 
         # Overload correction loop tracking
         self._overload_trigger_unsub: Callable[[], None] | None = None
@@ -219,6 +232,8 @@ class EvLoadBalancerCoordinator:
             self._unsub_listener()
             self._unsub_listener = None
         self._cancel_overload_timers()
+        if self._action_task and not self._action_task.done():
+            self._action_task.cancel()
         _LOGGER.debug("Coordinator stopped")
 
     @callback
@@ -710,7 +725,9 @@ class EvLoadBalancerCoordinator:
 
         # Schedule charger action execution for state transitions
         if self._has_actions():
-            self.hass.async_create_task(
+            if self._action_task and not self._action_task.done():
+                self._action_task.cancel()
+            self._action_task = self.hass.async_create_task(
                 self._execute_actions(prev_active, prev_current),
                 eager_start=False,
             )
@@ -853,6 +870,9 @@ class EvLoadBalancerCoordinator:
         - **Adjust** (was active, still active, current changed): call set_current.
         - **No change**: no action is executed.
 
+        Cancelled automatically when a newer state change triggers a new
+        action cycle, so stale retries do not interfere with current actions.
+
         Every action receives a ``charger_id`` variable (the config entry ID)
         so scripts can address the correct charger.  The ``set_current`` action
         additionally receives ``current_a`` (amps) and ``current_w`` (watts)
@@ -894,19 +914,23 @@ class EvLoadBalancerCoordinator:
                 current_w=current_w,
             )
 
+        # Refresh diagnostic sensors after actions complete — the initial
+        # dispatcher signal is sent by _update_and_notify() before actions
+        # are scheduled as a background task via async_create_task().
+        # Not reached when cancelled — CancelledError propagates from await.
+        async_dispatcher_send(self.hass, self.signal_update)
+
     async def _call_action(
         self,
         entity_id: str | None,
         action_name: str,
         **variables: float | str,
     ) -> None:
-        """Call a configured action script with the given variables.
+        """Call a configured action script, retrying with exponential backoff on failure.
 
-        Silently skips when the action is not configured.  When the script
-        call fails for any reason, logs a warning, fires an
-        ``ev_lb_action_failed`` event, creates a persistent dashboard
-        notification, and continues so that a single broken script does not
-        prevent the remaining actions from executing.
+        Silently skips when the action is not configured.  On success, clears
+        any previous error.  After all retries are exhausted, records the
+        failure in diagnostic state and notifies the user.
         """
         if not entity_id:
             return
@@ -915,45 +939,68 @@ class EvLoadBalancerCoordinator:
         if variables:
             service_data["variables"] = variables
 
-        try:
-            await self.hass.services.async_call(
-                "script",
-                "turn_on",
-                service_data,
-                blocking=True,
-            )
-            _LOGGER.debug(
-                "Action %s executed via %s (variables=%s)",
-                action_name,
-                entity_id,
-                variables or {},
-            )
-        except Exception as exc:  # noqa: BLE001 — catch all so a broken script never crashes the integration
-            _LOGGER.warning(
-                "Action %s failed via %s: %s",
-                action_name,
-                entity_id,
-                exc,
-            )
-            entry_id = self.entry.entry_id
-            self.hass.bus.async_fire(
-                EVENT_ACTION_FAILED,
-                {
-                    "entry_id": entry_id,
-                    "action_name": action_name,
-                    "entity_id": entity_id,
-                    "error": str(exc),
-                },
-            )
-            pn_async_create(
-                self.hass,
-                (
-                    f"Action script `{entity_id}` failed for action `{action_name}`: "
-                    f"{exc}. "
-                    "Check your charger action script configuration."
-                ),
-                title="EV Load Balancer — Action Failed",
-                notification_id=NOTIFICATION_ACTION_FAILED_FMT.format(
-                    entry_id=entry_id
-                ),
-            )
+        last_exc: Exception | None = None
+        for attempt in range(1 + ACTION_MAX_RETRIES):
+            try:
+                await self.hass.services.async_call(
+                    "script", "turn_on", service_data, blocking=True,
+                )
+            except Exception as exc:  # noqa: BLE001 — never crash on a broken script
+                last_exc = exc
+                if attempt < ACTION_MAX_RETRIES:
+                    delay = ACTION_RETRY_BASE_DELAY_S * (2 ** attempt)
+                    _LOGGER.debug(
+                        "Action %s attempt %d/%d failed via %s: %s — retrying in %.1f s",
+                        action_name, attempt + 1, 1 + ACTION_MAX_RETRIES,
+                        entity_id, exc, delay,
+                    )
+                    await self._sleep_fn(delay)
+                continue
+            # Success
+            _LOGGER.debug("Action %s executed via %s", action_name, entity_id)
+            self._record_action_success()
+            return
+
+        self._record_action_failure(action_name, entity_id, last_exc)
+
+    def _record_action_success(self) -> None:
+        """Clear error state and dismiss any action-failed notification."""
+        self.last_action_error = None
+        self.last_action_timestamp = datetime.now(tz=timezone.utc)
+        pn_async_dismiss(
+            self.hass,
+            NOTIFICATION_ACTION_FAILED_FMT.format(entry_id=self.entry.entry_id),
+        )
+
+    def _record_action_failure(
+        self, action_name: str, entity_id: str, exc: Exception | None,
+    ) -> None:
+        """Log, record, and notify the user about a failed action after retries."""
+        self.last_action_error = f"{action_name}: {exc}"
+        self.last_action_timestamp = datetime.now(tz=timezone.utc)
+        entry_id = self.entry.entry_id
+        _LOGGER.warning(
+            "Action %s failed via %s after %d attempts: %s",
+            action_name, entity_id, 1 + ACTION_MAX_RETRIES, exc,
+        )
+        self.hass.bus.async_fire(
+            EVENT_ACTION_FAILED,
+            {
+                "entry_id": entry_id,
+                "action_name": action_name,
+                "entity_id": entity_id,
+                "error": str(exc),
+            },
+        )
+        pn_async_create(
+            self.hass,
+            (
+                f"Action script `{entity_id}` failed for action "
+                f"`{action_name}`: {exc}. "
+                "Check your charger action script configuration."
+            ),
+            title="EV Load Balancer — Action Failed",
+            notification_id=NOTIFICATION_ACTION_FAILED_FMT.format(
+                entry_id=entry_id
+            ),
+        )

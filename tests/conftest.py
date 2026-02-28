@@ -7,6 +7,7 @@ duplicating boilerplate (DRY).
 
 import sys
 import os
+from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -197,3 +198,14 @@ def collect_events(hass: HomeAssistant, event_type: str) -> list[dict]:
 
     hass.bus.async_listen(event_type, _listener)
     return captured
+
+
+def no_sleep_coordinator(hass: HomeAssistant, entry: MockConfigEntry):
+    """Return the coordinator with sleep replaced by a no-op for fast tests.
+
+    Use this in tests that trigger action failures to avoid real
+    retry delays during the exponential backoff.
+    """
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator._sleep_fn = AsyncMock()
+    return coordinator
