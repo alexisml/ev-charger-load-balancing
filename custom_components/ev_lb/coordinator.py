@@ -134,7 +134,7 @@ class EvLoadBalancerCoordinator:
         self.last_action_timestamp: datetime | None = None
         self.last_action_status: str | None = None
         self.action_latency_ms: float | None = None
-        self.retry_count: int = 0
+        self.retry_count: int | None = None
 
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None

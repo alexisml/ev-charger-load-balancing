@@ -93,7 +93,7 @@
         "name": "Latencia de acción"
       },
       "retry_count": {
-        "name": "Reintentos de acción"
+        "name": "Contador de reintentos de acción"
       }
     },
     "binary_sensor": {

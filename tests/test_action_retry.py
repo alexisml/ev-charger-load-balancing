@@ -469,8 +469,7 @@ class TestDiagnosticSensors:
         )
         state = hass.states.get(sensor_id)
         assert state is not None
-        # Initial value is 0 (int) or unknown
-        assert state.state in ("unknown", "None", "none", "0")
+        assert state.state in ("unknown", "None", "none")
 
     async def test_retry_count_sensor_zero_on_first_try_success(
         self,
