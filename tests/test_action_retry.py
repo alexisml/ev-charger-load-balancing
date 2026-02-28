@@ -135,7 +135,7 @@ class TestRetryBackoff:
     ) -> None:
         """Charger control attempts stop after the configured number of retries."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        coordinator = no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        no_sleep_coordinator(hass, mock_config_entry_with_actions)
 
         call_count = 0
 
@@ -243,7 +243,7 @@ class TestSuccessClearsError:
         assert coordinator.last_action_error is not None
 
         # Step 2: Successful action clears error
-        calls = async_mock_service(hass, "script", "turn_on")
+        async_mock_service(hass, "script", "turn_on")
         hass.states.async_set(POWER_METER, "8000")
         await hass.async_block_till_done()
 
@@ -257,7 +257,7 @@ class TestSuccessClearsError:
     ) -> None:
         """Failure alerts automatically disappear from the dashboard after charger recovers."""
         await setup_integration(hass, mock_config_entry_with_actions)
-        coordinator = no_sleep_coordinator(hass, mock_config_entry_with_actions)
+        no_sleep_coordinator(hass, mock_config_entry_with_actions)
 
         # Step 1: Cause a failure to create the notification
         with patch(PN_CREATE), patch(PN_DISMISS), patch(
@@ -269,7 +269,7 @@ class TestSuccessClearsError:
 
         # Step 2: Successful action should dismiss the notification
         with patch(PN_DISMISS) as mock_dismiss:
-            calls = async_mock_service(hass, "script", "turn_on")
+            async_mock_service(hass, "script", "turn_on")
             hass.states.async_set(POWER_METER, "8000")
             await hass.async_block_till_done()
 
@@ -348,7 +348,7 @@ class TestDiagnosticSensors:
         mock_config_entry_with_actions: MockConfigEntry,
     ) -> None:
         """Last successful command time is displayed for monitoring charger activity."""
-        calls = async_mock_service(hass, "script", "turn_on")
+        async_mock_service(hass, "script", "turn_on")
         await setup_integration(hass, mock_config_entry_with_actions)
 
         hass.states.async_set(POWER_METER, "3000")
