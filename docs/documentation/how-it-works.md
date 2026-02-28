@@ -251,7 +251,7 @@ Together, these ensure that even a noisy power meter producing many updates per 
 
 ##### Tuning recommendations by installation type
 
-The defaults work well for most setups. If you need to adjust them, use the guidelines below. All three timing parameters are available as Number entities (`number.*_ramp_up_time`, `number.*_overload_trigger_delay`, `number.*_overload_loop_interval`) and can be changed at any time from the device page — see the [runtime-tunable parameters](#runtime-tunable-parameters) table above.
+The defaults work well for most setups. If you need to adjust them, use the guidelines below. All three timing parameters are available as Number entities (`number.*_ramp_up_time`, `number.*_overload_trigger_delay`, `number.*_overload_loop_interval`) and can be changed at any time from the device page — see the [Number entities](#number-entities-adjustable-at-runtime) table above.
 
 | Installation scenario | Ramp-up cooldown | Overload trigger delay | Overload loop interval | Notes |
 |---|---|---|---|---|
