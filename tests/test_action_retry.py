@@ -158,6 +158,60 @@ class TestRetryBackoff:
 
 
 # ---------------------------------------------------------------------------
+# Stale retry cancellation
+# ---------------------------------------------------------------------------
+
+
+class TestStaleRetryCancellation:
+    """Stale retry loops are cancelled when a newer state change arrives."""
+
+    async def test_new_state_change_cancels_stale_retry_loop(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """New charger commands abort in-progress retries from a stale state change."""
+        await setup_integration(hass, mock_config_entry_with_actions)
+        coordinator = hass.data[DOMAIN][mock_config_entry_with_actions.entry_id][
+            "coordinator"
+        ]
+
+        first_action_calls = 0
+
+        async def sleep_then_trigger_new_state(delay):
+            """Simulate retry delay; trigger a new state change on first sleep."""
+            nonlocal first_action_calls
+            first_action_calls += 1
+            if first_action_calls == 1:
+                # While the first retry is "sleeping", a new meter reading
+                # arrives — this cancels the current action task.
+                hass.states.async_set(POWER_METER, "5000")
+
+        coordinator._sleep_fn = sleep_then_trigger_new_state
+
+        service_call_count = 0
+
+        async def always_fail(*args, **kwargs):
+            nonlocal service_call_count
+            service_call_count += 1
+            raise HomeAssistantError("Failing")
+
+        with patch(
+            "homeassistant.core.ServiceRegistry.async_call",
+            side_effect=always_fail,
+        ):
+            hass.states.async_set(POWER_METER, "3000")
+            await hass.async_block_till_done()
+
+        # Without cancellation, the first action cycle (start_charging +
+        # set_current, each retried 1+3 times) would produce 8 calls, plus
+        # the second cycle's calls.  With cancellation the first cycle is
+        # cut short, so total calls should be fewer than two full cycles.
+        two_full_cycles = 2 * 2 * (1 + ACTION_MAX_RETRIES)
+        assert service_call_count < two_full_cycles
+
+
+# ---------------------------------------------------------------------------
 # Success clears diagnostic error state
 # ---------------------------------------------------------------------------
 

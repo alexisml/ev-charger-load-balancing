@@ -140,6 +140,9 @@ class EvLoadBalancerCoordinator:
         # Async sleep function — injectable for testing
         self._sleep_fn = asyncio.sleep
 
+        # Current action-execution task — cancelled when a new cycle starts
+        self._action_task: asyncio.Task[None] | None = None
+
         # Overload correction loop tracking
         self._overload_trigger_unsub: Callable[[], None] | None = None
         self._overload_loop_unsub: Callable[[], None] | None = None
@@ -720,7 +723,9 @@ class EvLoadBalancerCoordinator:
 
         # Schedule charger action execution for state transitions
         if self._has_actions():
-            self.hass.async_create_task(
+            if self._action_task and not self._action_task.done():
+                self._action_task.cancel()
+            self._action_task = self.hass.async_create_task(
                 self._execute_actions(prev_active, prev_current),
                 eager_start=False,
             )
@@ -863,11 +868,29 @@ class EvLoadBalancerCoordinator:
         - **Adjust** (was active, still active, current changed): call set_current.
         - **No change**: no action is executed.
 
+        Cancelled automatically when a newer state change triggers a new
+        action cycle, so stale retries do not interfere with current actions.
+
         Every action receives a ``charger_id`` variable (the config entry ID)
         so scripts can address the correct charger.  The ``set_current`` action
         additionally receives ``current_a`` (amps) and ``current_w`` (watts)
         so charger scripts can use whichever unit their hardware requires.
         """
+        try:
+            await self._execute_actions_inner(prev_active, prev_current)
+        except asyncio.CancelledError:
+            _LOGGER.debug("Action cycle cancelled — superseded by new state change")
+            raise
+
+        # Refresh diagnostic sensors after actions complete — the initial
+        # dispatcher signal is sent by _update_and_notify() before actions
+        # are scheduled as a background task via async_create_task().
+        async_dispatcher_send(self.hass, self.signal_update)
+
+    async def _execute_actions_inner(
+        self, prev_active: bool, prev_current: float
+    ) -> None:
+        """Run the charger actions for a single state transition."""
         new_active = self.active
         new_current = self.current_set_a
         charger_id = self.entry.entry_id
@@ -903,11 +926,6 @@ class EvLoadBalancerCoordinator:
                 current_a=new_current,
                 current_w=current_w,
             )
-
-        # Refresh diagnostic sensors after actions complete — the initial
-        # dispatcher signal is sent by _update_and_notify() before actions
-        # are scheduled as a background task via async_create_task().
-        async_dispatcher_send(self.hass, self.signal_update)
 
     async def _call_action(
         self,
