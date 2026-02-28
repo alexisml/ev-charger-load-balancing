@@ -876,21 +876,6 @@ class EvLoadBalancerCoordinator:
         additionally receives ``current_a`` (amps) and ``current_w`` (watts)
         so charger scripts can use whichever unit their hardware requires.
         """
-        try:
-            await self._execute_actions_inner(prev_active, prev_current)
-        except asyncio.CancelledError:
-            _LOGGER.debug("Action cycle cancelled — superseded by new state change")
-            raise
-
-        # Refresh diagnostic sensors after actions complete — the initial
-        # dispatcher signal is sent by _update_and_notify() before actions
-        # are scheduled as a background task via async_create_task().
-        async_dispatcher_send(self.hass, self.signal_update)
-
-    async def _execute_actions_inner(
-        self, prev_active: bool, prev_current: float
-    ) -> None:
-        """Run the charger actions for a single state transition."""
         new_active = self.active
         new_current = self.current_set_a
         charger_id = self.entry.entry_id
@@ -926,6 +911,12 @@ class EvLoadBalancerCoordinator:
                 current_a=new_current,
                 current_w=current_w,
             )
+
+        # Refresh diagnostic sensors after actions complete — the initial
+        # dispatcher signal is sent by _update_and_notify() before actions
+        # are scheduled as a background task via async_create_task().
+        # Not reached when cancelled — CancelledError propagates from await.
+        async_dispatcher_send(self.hass, self.signal_update)
 
     async def _call_action(
         self,

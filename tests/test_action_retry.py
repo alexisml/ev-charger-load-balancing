@@ -176,18 +176,18 @@ class TestStaleRetryCancellation:
             "coordinator"
         ]
 
-        first_action_calls = 0
+        first_sleep_done = False
 
-        async def sleep_then_trigger_new_state(delay):
-            """Simulate retry delay; trigger a new state change on first sleep."""
-            nonlocal first_action_calls
-            first_action_calls += 1
-            if first_action_calls == 1:
+        async def trigger_state_on_first_sleep(delay):
+            """On the first retry sleep, trigger a new state change that cancels this cycle."""
+            nonlocal first_sleep_done
+            if not first_sleep_done:
+                first_sleep_done = True
                 # While the first retry is "sleeping", a new meter reading
                 # arrives — this cancels the current action task.
                 hass.states.async_set(POWER_METER, "5000")
 
-        coordinator._sleep_fn = sleep_then_trigger_new_state
+        coordinator._sleep_fn = trigger_state_on_first_sleep
 
         service_call_count = 0
 
@@ -203,12 +203,16 @@ class TestStaleRetryCancellation:
             hass.states.async_set(POWER_METER, "3000")
             await hass.async_block_till_done()
 
-        # Without cancellation, the first action cycle (start_charging +
-        # set_current, each retried 1+3 times) would produce 8 calls, plus
-        # the second cycle's calls.  With cancellation the first cycle is
-        # cut short, so total calls should be fewer than two full cycles.
-        two_full_cycles = 2 * 2 * (1 + ACTION_MAX_RETRIES)
-        assert service_call_count < two_full_cycles
+        # The first cycle made 1 call (start_charging attempt 1), then slept
+        # and was cancelled.  The second cycle runs fully: 1 action
+        # (set_current adjust) × (1 + ACTION_MAX_RETRIES) attempts.
+        # Without cancellation the first cycle would run all 8 attempts
+        # (2 actions × 4 attempts each).
+        one_full_cycle = 2 * (1 + ACTION_MAX_RETRIES)
+        assert service_call_count < 2 * one_full_cycle
+        # The cancelled first cycle should have been cut short
+        assert coordinator._action_task is not None
+        assert coordinator._action_task.done()
 
 
 # ---------------------------------------------------------------------------
