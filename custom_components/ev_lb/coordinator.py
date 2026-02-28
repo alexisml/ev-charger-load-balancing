@@ -132,6 +132,9 @@ class EvLoadBalancerCoordinator:
         # Action diagnostic state (read by diagnostic sensors)
         self.last_action_error: str | None = None
         self.last_action_timestamp: datetime | None = None
+        self.last_action_status: str | None = None
+        self.action_latency_ms: float | None = None
+        self.retry_count: int = 0
 
         # Ramp-up cooldown tracking
         self._last_reduction_time: float | None = None
@@ -940,6 +943,7 @@ class EvLoadBalancerCoordinator:
             service_data["variables"] = variables
 
         last_exc: Exception | None = None
+        t_start = self._time_fn()
         for attempt in range(1 + ACTION_MAX_RETRIES):
             try:
                 await self.hass.services.async_call(
@@ -958,15 +962,20 @@ class EvLoadBalancerCoordinator:
                 continue
             # Success
             _LOGGER.debug("Action %s executed via %s", action_name, entity_id)
-            self._record_action_success()
+            latency_ms = (self._time_fn() - t_start) * 1000
+            self._record_action_success(attempt, latency_ms)
             return
 
-        self._record_action_failure(action_name, entity_id, last_exc)
+        latency_ms = (self._time_fn() - t_start) * 1000
+        self._record_action_failure(action_name, entity_id, last_exc, ACTION_MAX_RETRIES, latency_ms)
 
-    def _record_action_success(self) -> None:
+    def _record_action_success(self, retries: int, latency_ms: float) -> None:
         """Clear error state and dismiss any action-failed notification."""
         self.last_action_error = None
         self.last_action_timestamp = datetime.now(tz=timezone.utc)
+        self.last_action_status = "success"
+        self.action_latency_ms = round(latency_ms, 1)
+        self.retry_count = retries
         pn_async_dismiss(
             self.hass,
             NOTIFICATION_ACTION_FAILED_FMT.format(entry_id=self.entry.entry_id),
@@ -974,10 +983,14 @@ class EvLoadBalancerCoordinator:
 
     def _record_action_failure(
         self, action_name: str, entity_id: str, exc: Exception | None,
+        retries: int, latency_ms: float,
     ) -> None:
         """Log, record, and notify the user about a failed action after retries."""
         self.last_action_error = f"{action_name}: {exc}"
         self.last_action_timestamp = datetime.now(tz=timezone.utc)
+        self.last_action_status = "failure"
+        self.action_latency_ms = round(latency_ms, 1)
+        self.retry_count = retries
         entry_id = self.entry.entry_id
         _LOGGER.warning(
             "Action %s failed via %s after %d attempts: %s",
