@@ -232,6 +232,8 @@ class EvLoadBalancerCoordinator:
             self._unsub_listener()
             self._unsub_listener = None
         self._cancel_overload_timers()
+        if self._action_task and not self._action_task.done():
+            self._action_task.cancel()
         _LOGGER.debug("Coordinator stopped")
 
     @callback
