@@ -234,6 +234,40 @@ The **cooldown timer resets** whenever either of these happens:
 
 > ⚠️ **Very low cooldown values (below ~10 s) risk instability** if your service load has frequent spikes or is unpredictable. The recommended minimum is 20–30 s for most installations.
 
+#### Built-in throttling and debounce
+
+The integration includes several mechanisms that limit how often charger commands are sent, without requiring any additional configuration:
+
+| Mechanism | What it throttles | Default | Configurable via |
+|---|---|---|---|
+| **Ramp-up cooldown** | Current *increases* after any reduction or headroom drop | 30 s | `number.*_ramp_up_time` (5–300 s) |
+| **Overload trigger delay** | Overload corrections — transient spikes are absorbed | 2 s | `number.*_overload_trigger_delay` (1–60 s) |
+| **Overload loop interval** | Re-corrections while an overload persists | 5 s | `number.*_overload_loop_interval` (1–60 s) |
+| **Action coalescing** | Redundant charger commands — actions only fire when the target current actually changes (start, stop, or new value) | Always on | — |
+
+Together, these ensure that even a noisy power meter producing many updates per second will not flood your charger with commands. Current *reductions* are always applied instantly for safety — throttling a safety-critical decrease could allow the service limit to be exceeded.
+
+> **Why no meter smoothing?** The integration does not apply a moving average or windowed filter to the power meter input. Smoothing would delay the detection of real overloads, which conflicts with the safety-first design. Instead, the integration reacts instantly to every meter reading and uses the mechanisms above to throttle the *output* (charger commands) rather than filtering the *input* (meter values).
+
+##### Tuning recommendations by installation type
+
+The defaults work well for most setups. If you need to adjust them, use the guidelines below. All three timing parameters are available as Number entities (`number.*_ramp_up_time`, `number.*_overload_trigger_delay`, `number.*_overload_loop_interval`) and can be changed at any time from the device page — see the [Number entities](#number-entities-adjustable-at-runtime) table above.
+
+| Installation scenario | Ramp-up cooldown | Overload trigger delay | Overload loop interval | Notes |
+|---|---|---|---|---|
+| **Most homes** (MCB Type B/C, 10–20% margin below breaker rating) | 30 s (default) | 2 s (default) | 5 s (default) | Set `max_service_current` 2–4 A below the actual breaker rating for safety margin. |
+| **Tight margin** (`max_service_current` ≈ breaker rating, little headroom) | 20–30 s | 1 s | 3 s | Faster reaction compensates for the smaller safety buffer. |
+| **Slow-responding charger** (takes 5+ s to ramp) | 30–60 s | 2 s | 10–15 s | Avoids stacking commands that the charger cannot process in time. |
+| **Very spiky loads** (heat pumps, welders, large motors) | 45–60 s | 3–5 s | 5 s | Longer trigger delay prevents false overload triggers from inrush currents. |
+| **Stable loads, fast charger** (solar-only, no variable house loads) | 10–15 s | 1–2 s | 3–5 s | Lower cooldown allows quicker ramp-up when there are few transient spikes. |
+
+**About breakers and RCDs:**
+- **MCBs (miniature circuit breakers)** have thermal trip times of minutes to hours for moderate overloads (1.13–1.45× rated current). The default 2 s trigger delay is well within safe thermal limits. Setting `max_service_current` below the MCB rating is the primary safety measure. Faster timing does not replace proper current limits, but it can improve system stability when operating close to those limits (e.g., tight-margin installations).
+- **RCDs / GFCIs** (30 mA Type A/AC) protect against earth-leakage faults, not overcurrent. They do not affect these timing parameters.
+- **Type 2 SPDs** and other surge protection devices are not influenced by these settings.
+
+> ⚠️ **Disclaimer:** These recommendations are general guidance for typical residential installations. Electrical installations vary — breaker ratings, wiring capacity, charger response times, and local regulations all affect what values are safe. **Adjusting these parameters is at your own risk.** Always ensure your `max_service_current` is set at or below the rated capacity of your weakest upstream protection device (breaker, fuse, or wiring). If in doubt, consult a qualified electrician.
+
 ---
 
 ## Charger status sensor (optional)
