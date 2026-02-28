@@ -249,6 +249,25 @@ Together, these ensure that even a noisy power meter producing many updates per 
 
 > **Why no meter smoothing?** The integration does not apply a moving average or windowed filter to the power meter input. Smoothing would delay the detection of real overloads, which conflicts with the safety-first design. Instead, the integration reacts instantly to every meter reading and uses the mechanisms above to throttle the *output* (charger commands) rather than filtering the *input* (meter values).
 
+##### Tuning recommendations by installation type
+
+The defaults work well for most setups. If you need to adjust them, use the guidelines below.
+
+| Installation scenario | Ramp-up cooldown | Overload trigger delay | Overload loop interval | Notes |
+|---|---|---|---|---|
+| **Most homes** (MCB Type B/C, 10–20% margin below breaker rating) | 30 s (default) | 2 s (default) | 5 s (default) | Set `max_service_current` 2–4 A below the actual breaker rating for safety margin. |
+| **Tight margin** (`max_service_current` ≈ breaker rating, little headroom) | 20–30 s | 1 s | 3 s | Faster reaction compensates for the smaller safety buffer. |
+| **Slow-responding charger** (takes 5+ s to ramp) | 30–60 s | 2 s | 10–15 s | Avoids stacking commands that the charger cannot process in time. |
+| **Very spiky loads** (heat pumps, welders, large motors) | 45–60 s | 3–5 s | 5 s | Longer trigger delay prevents false overload triggers from inrush currents. |
+| **Stable loads, fast charger** (solar-only, no variable house loads) | 10–15 s | 1–2 s | 3–5 s | Lower cooldown allows quicker ramp-up when there are few transient spikes. |
+
+**About breakers and RCDs:**
+- **MCBs (miniature circuit breakers)** have thermal trip times of minutes to hours for moderate overloads (1.13–1.45× rated current). The default 2 s trigger delay is well within safe thermal limits. Setting `max_service_current` below the MCB rating is the primary safety measure — the timers are about comfort and stability, not breaker protection.
+- **RCDs / GFCIs** (30 mA Type A/AC) protect against earth-leakage faults, not overcurrent. They do not affect these timing parameters.
+- **Type 2 SPDs** and other surge protection devices are not influenced by these settings.
+
+> ⚠️ **Disclaimer:** These recommendations are general guidance for typical residential installations. Electrical installations vary — breaker ratings, wiring capacity, charger response times, and local regulations all affect what values are safe. **Adjusting these parameters is at your own risk.** Always ensure your `max_service_current` is set at or below the rated capacity of your weakest upstream protection device (breaker, fuse, or wiring). If in doubt, consult a qualified electrician.
+
 ---
 
 ## Charger status sensor (optional)
