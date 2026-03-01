@@ -312,6 +312,57 @@ Currently, the integration requires **script entities** (created in Settings →
 
 Direct inline action configuration (like automation action sequences) may be considered for a future version. For now, creating scripts is the recommended approach and provides the same flexibility since scripts support all HA action types (service calls, delays, conditions, etc.).
 
+### Alternative: automation that watches the output sensor
+
+Instead of configuring action scripts, you can leave the integration in **compute-only mode** (no scripts configured) and create a standard Home Assistant automation that triggers whenever the `sensor.*_charging_current_set` sensor changes. The integration still computes the optimal current in real time — your automation simply reacts to the result.
+
+```yaml
+automation:
+  - alias: "EV charger — follow load balancer output"
+    description: >
+      Sends the Watt-O-Balancer target current to the charger whenever it changes.
+    trigger:
+      - platform: state
+        entity_id: sensor.ev_charger_load_balancer_charging_current_set
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.to_state.state not in ['unavailable', 'unknown'] }}
+    action:
+      - choose:
+          # Charger should stop
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.to_state.state | float(0) == 0 }}"
+            sequence:
+              - action: ocpp.set_charge_rate
+                data:
+                  limit_amps: 0
+                  conn_id: 1
+          # Charger should charge at the computed current
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.to_state.state | float(0) > 0 }}"
+            sequence:
+              - action: ocpp.set_charge_rate
+                data:
+                  limit_amps: "{{ trigger.to_state.state | int }}"
+                  conn_id: 1
+    mode: single
+```
+
+> **When to prefer this approach:**
+> - You already have automations controlling your charger and want to keep everything in one place.
+> - You prefer the visual automation editor over separate script entities.
+> - You want to add complex conditions (time-of-day, solar surplus thresholds, etc.) that decide *whether* to follow the balancer output.
+>
+> **Trade-offs compared to action scripts:**
+> - The integration cannot report action success/failure — diagnostic sensors like `last_action_status` and `action_latency` will not be populated, and `ev_lb_action_failed` events will not fire.
+> - Transition logic (start → set_current sequencing, duplicate suppression) must be handled inside your automation instead of being managed by the integration.
+> - Automation triggers are slightly less immediate than the integration's direct script calls, though the difference is negligible for most chargers.
+
+Replace `sensor.ev_charger_load_balancer_charging_current_set` with your actual entity ID (find it in **Developer Tools → States** by searching for `current_set`). Replace the `ocpp.*` actions with whatever services your charger integration exposes.
+
 ---
 
 ## Adapting for different charger integrations
