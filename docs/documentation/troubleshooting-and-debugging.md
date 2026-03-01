@@ -213,6 +213,7 @@ You don't need to enable debug logs for basic monitoring. These sensors give you
 | `sensor.*_last_action_reason` | Why did the last update happen? (`power_meter_update`, `manual_override`, `fallback_unavailable`, `parameter_change`) |
 | `sensor.*_last_action_status` | Did the last charger command succeed? (`success` / `failure`) |
 | `sensor.*_last_action_error` | What went wrong? (error message from the last failed action, empty on success) |
+| `sensor.*_last_action_timestamp` | When did the last charger command finish? (ISO 8601 timestamp) |
 | `sensor.*_action_latency` | How long did the last charger command take? (wall-clock ms including retries) |
 | `sensor.*_retry_count` | How many retries were needed? (`0` = first-try success) |
 | `binary_sensor.*_power_meter_status` | Is my meter working? (On = yes, Off = no) |
