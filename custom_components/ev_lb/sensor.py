@@ -64,12 +64,14 @@ class EvLbCurrentSetSensor(RestoreSensor):
         self._coordinator = coordinator
 
     async def async_added_to_hass(self) -> None:
-        """Restore last known value and subscribe to coordinator updates."""
+        """Subscribe to coordinator updates (current starts at zero until a real calculation runs).
+
+        On startup or reload the coordinator intentionally starts at 0 A so
+        that no charge current is applied before the load balancer performs
+        its first real computation.  The sensor therefore does **not** push
+        a restored value back to the coordinator.
+        """
         await super().async_added_to_hass()
-        last = await self.async_get_last_sensor_data()
-        if last and last.native_value is not None:
-            self._attr_native_value = last.native_value
-            self._coordinator.current_set_a = float(last.native_value)
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,

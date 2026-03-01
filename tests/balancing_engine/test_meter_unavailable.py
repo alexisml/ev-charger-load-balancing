@@ -594,3 +594,29 @@ class TestCoordinatorDeferredStartup:
 
         # Coordinator remains in its initial state — callback did nothing
         assert coordinator.meter_healthy is True
+
+    async def test_deferred_startup_recomputes_when_meter_available_at_ha_start(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Coordinator performs its first real calculation when HA finishes loading and the meter is healthy."""
+        hass.states.async_set(POWER_METER, "3000")
+        coordinator = EvLoadBalancerCoordinator(hass, mock_config_entry)
+
+        with patch.object(
+            type(hass), "is_running", new_callable=PropertyMock, return_value=False
+        ):
+            coordinator.async_start()
+
+        # Before HA started: coordinator sits at 0 A (safe default)
+        assert coordinator.current_set_a == 0.0
+
+        # Fire the HA started event — meter has a valid 3000 W reading
+        hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED, {})
+        await hass.async_block_till_done()
+
+        # Coordinator performed its first real calculation
+        assert coordinator.meter_healthy is True
+        assert coordinator.current_set_a > 0.0
+        assert coordinator.active is True
+
+        coordinator.async_stop()

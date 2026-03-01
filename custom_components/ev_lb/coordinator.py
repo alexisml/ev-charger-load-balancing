@@ -241,12 +241,16 @@ class EvLoadBalancerCoordinator:
 
     @callback
     def _handle_ha_started(self, _event: Event) -> None:
-        """Evaluate meter health once HA has fully started.
+        """Evaluate meter health and run the first real calculation once HA has fully started.
 
         Called exactly once via ``EVENT_HOMEASSISTANT_STARTED``, at which
         point every integration has had a chance to register its entities.
         A missing or unavailable power-meter state at this point is a genuine
         problem rather than a transient startup artefact.
+
+        When the meter is healthy, an initial recompute is performed
+        immediately so the charger receives a calculated target as soon as
+        HA is ready rather than sitting at 0 A until the next meter event.
 
         Guards against the entry being unloaded before HA finishes starting
         by checking whether the state-change listener is still active.
@@ -260,6 +264,8 @@ class EvLoadBalancerCoordinator:
             self.meter_healthy = False
             self.fallback_active = True
             self._apply_fallback_current()
+        else:
+            self._force_recompute_from_meter()
         _LOGGER.debug(
             "HA started — power meter %s is %s",
             self._power_meter_entity,

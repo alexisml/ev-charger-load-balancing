@@ -32,7 +32,7 @@ from custom_components.ev_lb.const import (
     MIN_EV_CURRENT_MAX,
     MIN_EV_CURRENT_MIN,
 )
-from conftest import setup_integration, get_entity_id
+from conftest import POWER_METER, setup_integration, get_entity_id
 
 # Entity IDs are deterministic: derived from the device name
 # ("EV Charger Load Balancer") and the entity translation key.
@@ -49,7 +49,7 @@ _BINARY_ACTIVE = "binary_sensor.ev_charger_load_balancer_load_balancing_active"
 
 
 class TestSensorDefaultsAndRestore:
-    """`current_set` sensor starts at zero on a fresh install, restores from cache, and reflects in balancing."""
+    """`current_set` sensor starts at zero on startup and ignores cached values for a safe boot."""
 
     async def test_current_set_defaults_to_zero(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
@@ -67,10 +67,10 @@ class TestSensorDefaultsAndRestore:
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         assert coordinator.current_set_a == 0.0
 
-    async def test_current_set_restores_from_cache(
+    async def test_current_set_ignores_cache_on_restart(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Charger continues at its last known current after a restart instead of dropping to zero."""
+        """Charger starts at zero after a restart rather than restoring the cached value, ensuring a safe startup."""
         mock_restore_cache_with_extra_data(
             hass,
             [
@@ -87,10 +87,39 @@ class TestSensorDefaultsAndRestore:
         )
         state = hass.states.get(current_set_id)
         assert state is not None
-        assert float(state.state) == 16.0
+        # Coordinator starts at 0 A — no charge until a real calculation runs
+        assert float(state.state) == 0.0
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        assert coordinator.current_set_a == 16.0
+        assert coordinator.current_set_a == 0.0
+
+    async def test_first_meter_update_triggers_real_calculation_after_restart(
+        self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    ) -> None:
+        """Charging resumes from a real calculation after restart, not from the cached value."""
+        mock_restore_cache_with_extra_data(
+            hass,
+            [
+                (
+                    State(_SENSOR_CURRENT_SET, "16.0"),
+                    {"native_value": 16.0, "native_unit_of_measurement": "A"},
+                ),
+            ],
+        )
+        await setup_integration(hass, mock_config_entry)
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        assert coordinator.current_set_a == 0.0
+
+        # First real meter update triggers a proper calculation
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+
+        current_set_id = get_entity_id(
+            hass, mock_config_entry, "sensor", "current_set"
+        )
+        assert float(hass.states.get(current_set_id).state) > 0.0
+        assert coordinator.active is True
 
 
 # ---------------------------------------------------------------------------
