@@ -79,6 +79,7 @@ The integration watches your home's power meter. When total service power change
 | Guide | Description |
 |---|---|
 | [Action Scripts Guide](docs/documentation/action-scripts-guide.md) | Charger control scripts — OCPP, REST, Modbus, switch examples |
+| [Starter Script Templates](docs/examples/) | Ready-to-use YAML templates for all charger types |
 | [Event Notifications Guide](docs/documentation/event-notifications-guide.md) | Event types, payloads, automation examples for mobile alerts |
 | [Logging Guide](docs/documentation/logging-guide.md) | Debug logs, log levels, diagnostic sensors |
 

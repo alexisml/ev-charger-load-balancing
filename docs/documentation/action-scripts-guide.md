@@ -206,6 +206,102 @@ When charging resumes after being stopped, `start_charging` is called **before**
 
 ---
 
+## Validation checklist
+
+Use this checklist to verify your action scripts before and after connecting them to the integration.
+
+### Before connecting scripts
+
+- [ ] **Script entities exist.** Confirm each script appears in **Developer Tools → Services** (search for `script.ev_lb_`).
+- [ ] **Test set_current manually.** In Developer Tools → Actions, call:
+  ```yaml
+  service: script.turn_on
+  target:
+    entity_id: script.ev_lb_set_current
+  data:
+    variables:
+      current_a: 10
+      current_w: 2300
+      charger_id: test
+  ```
+  Confirm your charger adjusts to 10 A.
+- [ ] **Test stop_charging manually.** Call `script.turn_on` for your stop script with `variables: {charger_id: test}`. Confirm the charger stops.
+- [ ] **Test start_charging manually.** Call `script.turn_on` for your start script with `variables: {charger_id: test}`. Confirm the charger resumes.
+- [ ] **Verify variable usage.** Open each script in YAML mode and confirm template variables are referenced correctly (e.g., `{{ current_a | int }}`, not a hardcoded value).
+- [ ] **Check script mode.** All scripts should use `mode: single` (the default) to prevent overlapping calls.
+
+### After connecting scripts
+
+- [ ] **Verify integration loaded.** Check **Settings → Devices & Services** — "Watt-O-Balancer" should appear without errors.
+- [ ] **Trigger a current change.** Change the power meter value (or wait for a real change) and confirm `sensor.*_current_set` updates.
+- [ ] **Check last action status.** In Developer Tools → States, confirm `sensor.*_last_action_status` shows `success`.
+- [ ] **Verify no error notifications.** Check the HA notifications bell — there should be no `ev_lb_action_failed` persistent notifications.
+- [ ] **Test an overload.** Temporarily increase the power meter value above the service limit and confirm the charger stops. Then reduce it and confirm charging resumes.
+
+---
+
+## Best practices
+
+### Script mode
+
+Use `mode: single` (the default) for all action scripts. This prevents multiple overlapping calls if the integration fires actions faster than your charger can respond. The integration sends actions with `blocking: true`, so each call waits for the script to finish before the next one starts.
+
+If you experience issues with scripts not responding because a previous call is still running, `mode: restart` is an alternative — it cancels the running call and starts a new one. Avoid `mode: queued` or `mode: parallel`, as they can lead to out-of-order execution.
+
+### Error handling in scripts
+
+The integration handles script failures at the integration level (logging, events, notifications). However, you can add error handling **inside** your scripts for charger-specific resilience:
+
+**Add a confirmation step** if your charger supports reading back the current:
+```yaml
+sequence:
+  - action: ocpp.set_charge_rate
+    data:
+      limit_amps: "{{ current_a | int }}"
+      conn_id: 1
+  - delay:
+      seconds: 2
+  - condition: template
+    value_template: >
+      {{ states('sensor.charger_current_import') | float(0) > 0 }}
+```
+
+**Add a notification on unexpected state** to alert yourself when the charger did not respond as expected:
+```yaml
+sequence:
+  - action: ocpp.set_charge_rate
+    data:
+      limit_amps: "{{ current_a | int }}"
+      conn_id: 1
+  - delay:
+      seconds: 3
+  - if:
+      - condition: template
+        value_template: >
+          {{ states('sensor.charger_current_import') | float(0) == 0 }}
+    then:
+      - action: persistent_notification.create
+        data:
+          title: "EV Charger Warning"
+          message: "Charger did not respond to set_current ({{ current_a }} A)"
+```
+
+### Testing and debugging
+
+- **Always test manually first.** Before connecting any script to the integration, test it from **Developer Tools → Actions** with realistic variable values.
+- **Use the diagnostic sensors.** Check `sensor.*_last_action_status`, `sensor.*_last_action_error`, and `sensor.*_action_latency` to monitor how your scripts are performing.
+- **Enable debug logs temporarily.** Add `custom_components.ev_lb: debug` to your logger config to see the full computation pipeline and action execution. See the [Logging Guide](logging-guide.md) for details.
+- **Monitor the events.** Use Developer Tools → Events to listen for `ev_lb_action_failed` while testing to catch failures in real time.
+
+### Compatibility notes
+
+- **OCPP chargers:** The `limit_amps` value is cast to integer by the template (`| int`). OCPP chargers generally accept whole-Amp values only.
+- **REST chargers:** Verify your charger API's expected content type, authentication, and payload format. Test the `rest_command` independently before using it in a script.
+- **Modbus chargers:** Register addresses, value scaling, and slave addresses vary by manufacturer. Always consult your charger's Modbus register map documentation.
+- **Switch chargers:** Switch-based control provides only on/off — there is no current adjustment. The integration will still compute the optimal current (visible in sensors), but only stop/start commands reach the charger.
+
+---
+
 ## Can I use an action directly instead of a script?
 
 Currently, the integration requires **script entities** (created in Settings → Automations & Scenes → Scripts). This was chosen because:
@@ -215,6 +311,57 @@ Currently, the integration requires **script entities** (created in Settings →
 3. **Scripts are reusable** — the same script can be called by automations, the integration, or manually from the Developer Tools.
 
 Direct inline action configuration (like automation action sequences) may be considered for a future version. For now, creating scripts is the recommended approach and provides the same flexibility since scripts support all HA action types (service calls, delays, conditions, etc.).
+
+### Alternative: automation that watches the output sensor
+
+Instead of configuring action scripts, you can leave the integration in **compute-only mode** (no scripts configured) and create a standard Home Assistant automation that triggers whenever the `sensor.*_charging_current_set` sensor changes. The integration still computes the optimal current in real time — your automation simply reacts to the result.
+
+```yaml
+automation:
+  - alias: "EV charger — follow load balancer output"
+    description: >
+      Sends the Watt-O-Balancer target current to the charger whenever it changes.
+    trigger:
+      - platform: state
+        entity_id: sensor.ev_charger_load_balancer_charging_current_set
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.to_state.state not in ['unavailable', 'unknown'] }}
+    action:
+      - choose:
+          # Charger should stop
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.to_state.state | float(0) == 0 }}"
+            sequence:
+              - action: ocpp.set_charge_rate
+                data:
+                  limit_amps: 0
+                  conn_id: 1
+          # Charger should charge at the computed current
+          - conditions:
+              - condition: template
+                value_template: "{{ trigger.to_state.state | float(0) > 0 }}"
+            sequence:
+              - action: ocpp.set_charge_rate
+                data:
+                  limit_amps: "{{ trigger.to_state.state | int }}"
+                  conn_id: 1
+    mode: single
+```
+
+> **When to prefer this approach:**
+> - You already have automations controlling your charger and want to keep everything in one place.
+> - You prefer the visual automation editor over separate script entities.
+> - You want to add complex conditions (time-of-day, solar surplus thresholds, etc.) that decide *whether* to follow the balancer output.
+>
+> **Trade-offs compared to action scripts:**
+> - The integration cannot report action success/failure — diagnostic sensors like `last_action_status` and `action_latency` will not be populated, and `ev_lb_action_failed` events will not fire.
+> - Transition logic (start → set_current sequencing, duplicate suppression) must be handled inside your automation instead of being managed by the integration.
+> - Automation triggers are slightly less immediate than the integration's direct script calls, though the difference is negligible for most chargers.
+
+Replace `sensor.ev_charger_load_balancer_charging_current_set` with your actual entity ID (find it in **Developer Tools → States** by searching for `current_set`). Replace the `ocpp.*` actions with whatever services your charger integration exposes.
 
 ---
 
@@ -272,6 +419,26 @@ Check your OCPP charger's device page in Home Assistant (**Settings → Devices 
 
 ### REST API chargers
 
+REST-based chargers use the Home Assistant `rest_command` integration to send HTTP requests. You must first define your REST commands in `configuration.yaml`:
+
+```yaml
+# configuration.yaml — adjust URLs and payloads for your charger
+rest_command:
+  set_charger_current:
+    url: "http://YOUR_CHARGER_IP/api/set_current"
+    method: POST
+    content_type: "application/json"
+    payload: '{"current": {{ current }}}'
+  stop_charger:
+    url: "http://YOUR_CHARGER_IP/api/stop"
+    method: POST
+  start_charger:
+    url: "http://YOUR_CHARGER_IP/api/start"
+    method: POST
+```
+
+Then use these in your scripts:
+
 ```yaml
 # set_current — use whichever unit your API requires
 - action: rest_command.set_charger_current
@@ -290,17 +457,57 @@ Check your OCPP charger's device page in Home Assistant (**Settings → Devices 
 - action: rest_command.start_charger
 ```
 
+> **REST tips:**
+> - Check your charger's API documentation for the correct URL, HTTP method, and payload format.
+> - Some chargers expect `application/x-www-form-urlencoded` instead of JSON — adjust `content_type` accordingly.
+> - If your charger requires authentication, add `username` and `password` fields to the `rest_command` definition or use `headers` for token-based auth.
+
 ### Modbus chargers
 
+Modbus chargers are controlled by writing values to specific registers. You must first configure the Modbus hub in `configuration.yaml`:
+
 ```yaml
-# set_current
+# configuration.yaml — adjust host and port for your charger
+modbus:
+  - name: charger
+    type: tcp
+    host: YOUR_CHARGER_IP
+    port: 502
+```
+
+Then use `modbus.write_register` in your scripts:
+
+```yaml
+# set_current — adjust address and scaling for your charger
 - action: modbus.write_register
   data:
     hub: charger
     unit: 1
     address: 100
     value: "{{ (current_a * 10) | int }}"
+
+# stop_charging — set current to 0
+- action: modbus.write_register
+  data:
+    hub: charger
+    unit: 1
+    address: 100
+    value: 0
+
+# start_charging — set minimum current (6 A)
+- action: modbus.write_register
+  data:
+    hub: charger
+    unit: 1
+    address: 100
+    value: 60
 ```
+
+> **Modbus tips:**
+> - The `address` and value scaling depend entirely on your charger's register map. Check your charger documentation for the correct register address and unit (whole Amps, tenths of Amps, milliamps, etc.).
+> - Some chargers use holding registers (`write_register`), others use coils (`write_coil`). Verify which your charger requires.
+> - If your charger has a separate enable/disable coil, add a `write_coil` step to your `stop_charging` and `start_charging` scripts.
+> - The `unit` parameter is the Modbus slave address (usually `1` for single-charger setups).
 
 ### Generic switch-based chargers
 
@@ -317,6 +524,10 @@ Check your OCPP charger's device page in Home Assistant (**Settings → Devices 
 ```
 
 > **Note:** For switch-based chargers, `set_current` may not be applicable if the charger doesn't support current limiting. In that case, only configure `stop_charging` and `start_charging`.
+
+### Starter script templates
+
+Ready-to-use YAML templates for all charger types are available in the [`docs/examples/`](../examples/) directory. Each template includes inline instructions, field declarations, and step-by-step setup guidance. Copy the template for your charger type and adjust the hardware-specific values.
 
 ---
 

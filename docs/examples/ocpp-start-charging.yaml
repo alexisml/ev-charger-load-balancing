@@ -1,0 +1,34 @@
+# Watt-O-Balancer — OCPP: Start Charging
+# Integration: lbbrhzn/ocpp (https://github.com/lbbrhzn/ocpp)
+#
+# This script resumes charging by setting the minimum allowed current (6 A).
+# OCPP has no dedicated "start" command — a positive limit signals the charger
+# to begin. The integration calls set_current immediately after with the
+# actual target, so the 6 A is transient.
+#
+# Received variables:
+#   charger_id — config entry ID (string)
+#
+# How to use:
+#   1. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   2. Switch to YAML mode and paste this content.
+#   3. Adjust conn_id if your charger has multiple connectors (most use 1).
+#   4. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_start_charging
+#        Data:    { variables: { charger_id: test } }
+#   5. Confirm your charger resumes before wiring this to the integration.
+
+alias: EV LB - Start Charging (OCPP)
+description: Resume EV charging via OCPP (set minimum 6 A)
+mode: single
+fields:
+  charger_id:
+    description: Charger identifier
+    selector:
+      text:
+sequence:
+  - action: ocpp.set_charge_rate
+    data:
+      limit_amps: 6
+      conn_id: 1

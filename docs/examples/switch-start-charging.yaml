@@ -1,0 +1,34 @@
+# Watt-O-Balancer — Switch: Start Charging
+#
+# This script resumes charging by turning on a switch entity.
+# Use this for chargers controlled via a smart plug or relay.
+#
+# Received variables:
+#   charger_id — config entry ID (string)
+#
+# Note: Switch-based chargers typically don't support current limiting.
+#   Only configure stop_charging and start_charging scripts — skip
+#   set_current unless your charger also has a separate current control.
+#
+# How to use:
+#   1. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   2. Switch to YAML mode and paste this content.
+#   3. Replace switch.ev_charger with your charger's switch entity ID.
+#   4. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_start_charging
+#        Data:    { variables: { charger_id: test } }
+#   5. Confirm your charger resumes before wiring this to the integration.
+
+alias: EV LB - Start Charging (Switch)
+description: Resume EV charging by turning on the charger switch
+mode: single
+fields:
+  charger_id:
+    description: Charger identifier
+    selector:
+      text:
+sequence:
+  - action: switch.turn_on
+    target:
+      entity_id: switch.ev_charger

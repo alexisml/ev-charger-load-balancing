@@ -1,0 +1,32 @@
+# Watt-O-Balancer — OCPP: Stop Charging
+# Integration: lbbrhzn/ocpp (https://github.com/lbbrhzn/ocpp)
+#
+# This script stops charging by setting the current limit to 0 A.
+# The integration calls it when headroom drops below the minimum.
+#
+# Received variables:
+#   charger_id — config entry ID (string)
+#
+# How to use:
+#   1. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   2. Switch to YAML mode and paste this content.
+#   3. Adjust conn_id if your charger has multiple connectors (most use 1).
+#   4. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_stop_charging
+#        Data:    { variables: { charger_id: test } }
+#   5. Confirm your charger stops before wiring this to the integration.
+
+alias: EV LB - Stop Charging (OCPP)
+description: Stop EV charging via OCPP (set limit to 0 A)
+mode: single
+fields:
+  charger_id:
+    description: Charger identifier
+    selector:
+      text:
+sequence:
+  - action: ocpp.set_charge_rate
+    data:
+      limit_amps: 0
+      conn_id: 1

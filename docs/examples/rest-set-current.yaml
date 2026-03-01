@@ -1,0 +1,61 @@
+# Watt-O-Balancer — REST API: Set Current
+#
+# This script sets the charging current via a REST command.
+# You must first define the rest_command in configuration.yaml (see below).
+#
+# Received variables:
+#   current_a  — target current in Amps (float, e.g. 16.0)
+#   current_w  — target power in Watts  (float, e.g. 3680.0)
+#   charger_id — config entry ID (string)
+#
+# Prerequisites — add to configuration.yaml:
+#
+#   rest_command:
+#     set_charger_current:
+#       url: "http://YOUR_CHARGER_IP/api/set_current"
+#       method: POST
+#       content_type: "application/json"
+#       payload: '{"current": {{ current }}}'
+#
+# How to use:
+#   1. Add the rest_command above to your configuration.yaml and restart HA.
+#   2. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   3. Switch to YAML mode and paste this content.
+#   4. Replace the rest_command name if yours differs.
+#   5. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_set_current
+#        Data:    { variables: { current_a: 10, current_w: 2300, charger_id: test } }
+#   6. Confirm your charger responds before wiring this to the integration.
+
+alias: EV LB - Set Current (REST)
+description: Set the EV charger current limit via REST API
+mode: single
+fields:
+  current_a:
+    description: Target charging current in Amps
+    example: 16.0
+    selector:
+      number:
+        min: 0
+        max: 80
+        step: 1
+        unit_of_measurement: A
+  current_w:
+    description: Target charging power in Watts
+    example: 3680.0
+    selector:
+      number:
+        min: 0
+        max: 18400
+        step: 1
+        unit_of_measurement: W
+  charger_id:
+    description: Charger identifier
+    example: "abc123"
+    selector:
+      text:
+sequence:
+  - action: rest_command.set_charger_current
+    data:
+      current: "{{ current_a }}"
