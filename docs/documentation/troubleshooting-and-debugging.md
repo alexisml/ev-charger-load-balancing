@@ -262,7 +262,25 @@ Yes. Without action scripts configured, the integration runs in "compute-only" m
 
 Yes, as long as you have a sensor reporting total household power in Watts. The integration does not differentiate between grid, solar, or battery power — it uses the total metered value to compute headroom.
 
-If you want to charge only from solar surplus, create a template sensor that subtracts solar production from grid import and use that as the power meter input.
+There are **two approaches** for solar-aware charging:
+
+1. **Limit charger max to solar surplus** (recommended) — keep your normal power meter and use an automation to set `number.*_max_charger_current` based on your surplus. The load balancer then ensures the charger never exceeds the surplus *or* the service limit. See [Combining with solar surplus or time-of-use tariffs](how-it-works.md#combining-with-solar-surplus-or-time-of-use-tariffs) for step-by-step examples with ready-to-use YAML.
+
+2. **Use a template sensor as the power meter** — create a template sensor that shows only grid import power and use it as the power meter input during initial setup:
+
+```yaml
+# Template sensor: monitors power drawn from the grid
+template:
+  - sensor:
+      - name: "Grid import power"
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set grid_import = states('sensor.grid_power') | float(0) %}
+          {{ [grid_import, 0] | max }}
+```
+
+Approach 1 is recommended because it allows the load balancer to protect your service limit at all times while capping charging to your surplus. Approach 2 only monitors grid import, so the balancer cannot see total household load when solar is offsetting consumption — this could allow combined load to exceed your service limit on cloudy days.
 
 ### What happens during a Home Assistant restart?
 
