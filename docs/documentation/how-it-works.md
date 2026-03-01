@@ -20,6 +20,8 @@ That's it. It's a reactive, real-time load balancer for a single EV charger.
 - **Event notifications.** When faults occur (overload, meter lost, fallback activated), the integration fires HA events and creates persistent notifications. You can build automations on these to get mobile alerts.
 - **State survives restarts.** All entity states are restored after a Home Assistant restart. The charger current stays at its last known value until fresh meter data arrives.
 
+---
+
 ## What NOT to expect
 
 - **This is not a charger driver.** The integration does not communicate directly with your charger hardware. It computes the optimal current and calls user-configured scripts to execute the commands. If your scripts are wrong or your charger integration is broken, the integration can't fix that.
@@ -100,6 +102,8 @@ automation:
         data:
           value: 32
 ```
+
+Alternatively, to limit rather than fully stop charging during peak hours:
 
 ```yaml
 # Example: limit charging to 10 A during peak, full speed off-peak
@@ -233,10 +237,10 @@ Then the safety rules apply:
 ```mermaid
 flowchart TD
     A([Trigger event])
-    A --> Z{"Charger status sensor\nconfigured?"}
-    Z -- "No sensor / unknown state" --> ZA["ev_estimate = current_set_a\n(assume charging)"]
+    A --> Z{"Charger status sensor<br/>configured?"}
+    Z -- "No sensor / unknown state" --> ZA["ev_estimate = current_set_a<br/>(assume charging)"]
     Z -- "Sensor state == 'Charging'" --> ZA
-    Z -- "Sensor state != 'Charging'" --> ZB["ev_estimate = 0\n(EV not drawing)"]
+    Z -- "Sensor state != 'Charging'" --> ZB["ev_estimate = 0<br/>(EV not drawing)"]
     ZA --> B["Isolate non-EV load<br/>non_ev_w = max(0, house_w − ev_estimate × V)"]
     ZB --> B
     B --> C["available_a = service_a − non_ev_w / V<br/>target_a = min(available_a, max_charger_a), floor to 1 A step"]
@@ -330,11 +334,11 @@ The overload correction loop solves this:
 sequenceDiagram
     participant Meter as Power Meter
     participant C as Coordinator
-    participant T as Trigger Timer (2 s default)
-    participant L as Loop Timer (5 s default)
+    participant T as Trigger Timer
+    participant L as Loop Timer
 
     Meter->>C: state_change — high load
-    C->>C: _recompute() → available = −4 A (overloaded)
+    C->>C: _recompute() → available = -4 A (overloaded)
     C->>T: schedule trigger in 2 s
 
     Note over Meter,C: Meter does not report again (value unchanged)
@@ -374,14 +378,14 @@ The `sensor.*_balancer_state` diagnostic sensor tracks what the integration is d
 
 ```mermaid
 stateDiagram-v2
-    state "STOPPED\ntarget = 0 A" as STOPPED
-    state "ADJUSTING\ntarget changed" as ADJUSTING
-    state "ACTIVE\nsteady state" as ACTIVE
-    state "RAMP_UP_HOLD\ncooldown blocking increase" as RAMP_UP_HOLD
-    state "DISABLED\nswitch off" as DISABLED
+    state "STOPPED" as STOPPED
+    state "ADJUSTING" as ADJUSTING
+    state "ACTIVE" as ACTIVE
+    state "RAMP_UP_HOLD" as RAMP_UP_HOLD
+    state "DISABLED" as DISABLED
 
     [*] --> STOPPED
-    STOPPED --> ADJUSTING : headroom ≥ min_ev_a\nAND cooldown elapsed
+    STOPPED --> ADJUSTING : headroom ≥ min_ev_a AND cooldown elapsed
     ADJUSTING --> ACTIVE : same target next cycle
     ADJUSTING --> STOPPED : overload (target < min_ev_a)
     ADJUSTING --> RAMP_UP_HOLD : increase needed but cooldown active
@@ -436,7 +440,7 @@ flowchart TD
     B -- "Stop (default)" --> C["Set charger to 0 A<br/>Fire ev_lb_meter_unavailable event"]
     B -- "Ignore" --> D["Keep last computed current<br/>No action taken"]
     B -- "Set specific current" --> E["Apply fallback current<br/>(capped at charger max)<br/>Fire ev_lb_fallback_activated event"]
-    C --> F(["⏳ Wait for meter recovery"])
+    C --> F(["Wait for meter recovery"])
     D --> F
     E --> F
     F --> G(["Meter reports valid value → resume normal balancing"])
@@ -496,12 +500,12 @@ sequenceDiagram
     participant Meter as Power Meter
 
     HA->>LB: Startup — load integration
-    LB->>Sensors: Restore last known values<br/>(current, headroom, state, switch)
-    Note over LB: No commands sent yet<br/>Waiting for HA to fully start
-    HA->>LB: EVENT_HOMEASSISTANT_STARTED<br/>(all integrations loaded)
+    LB->>Sensors: Restore last known values (current, headroom, state, switch)
+    Note over LB: No commands sent yet — waiting for HA to fully start
+    HA->>LB: EVENT_HOMEASSISTANT_STARTED (all integrations loaded)
     LB->>Meter: Check meter state
     alt Meter is unavailable
-        LB->>LB: Apply configured fallback<br/>(stop / ignore / set_current)
+        LB->>LB: Apply configured fallback (stop / ignore / set_current)
         LB->>Sensors: Update entity states
     else Meter is healthy
         Note over LB: Wait for first meter event
