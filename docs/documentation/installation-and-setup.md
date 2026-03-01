@@ -61,7 +61,7 @@ flowchart LR
 | Field | What it is | What to enter | Default |
 |---|---|---|---|
 | **Power meter sensor** | The sensor that reports your total service power in Watts. This is the main input the integration uses to compute available headroom. | Select any `sensor.*` entity that reports power in W. This is typically your main electricity meter, a CT clamp sensor, or a smart meter integration. | *(required — no default)* |
-| **Supply voltage** | Your nominal mains voltage. Used to convert between Watts and Amps. | Enter `230` for most of Europe, `240` for UK/Australia, or `120` for North America. | `230` V |
+| **Supply voltage** | Your nominal mains voltage. Used to convert between Watts and Amps. The integration assumes a **single-phase** supply. For three-phase installations, see [Single-phase assumption and multi-phase installations](how-it-works.md#single-phase-assumption-and-multi-phase-installations). | Enter `230` for most of Europe, `240` for UK/Australia, or `120` for North America. | `230` V |
 | **Max service current** | Your service current limit. The integration will **never** allow total consumption to exceed this. You can set this **lower than your actual breaker rating** to keep a permanent safety margin — for example, enter 28 A on a 32 A service to always reserve 4 A for other loads. It can also represent a subcircuit or any custom power budget. | Check your main breaker or electrical panel. Common values: 25 A, 32 A, 40 A, 63 A. | `32` A |
 | **When power meter is unavailable** | What should happen if your power meter sensor stops reporting (goes `unavailable` or `unknown`). | Choose one of three options — see below. | `Stop charging` |
 

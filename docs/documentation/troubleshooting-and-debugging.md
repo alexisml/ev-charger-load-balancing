@@ -287,6 +287,10 @@ Yes. The ramp-up cooldown defaults to 30 seconds and is adjustable via `number.*
 
 Not yet. The current version supports one charger per instance, and only one instance is allowed. Multi-charger support with per-charger prioritization is planned for Phase 2. See the [multi-charger plan](milestones/02-2026-02-19-multi-charger-plan.md).
 
+### Does it support three-phase (multi-phase) installations?
+
+The integration assumes a single-phase supply for all Watt ↔ Amp conversions. It works correctly for single-phase chargers on single-phase services. For three-phase chargers or mixed setups, the single-phase formula may give incorrect results. Workarounds using template sensors are available — see [Single-phase assumption and multi-phase installations](how-it-works.md#single-phase-assumption-and-multi-phase-installations) for detailed guidance, examples, and important caveats.
+
 ### Is it safe?
 
 The integration prioritizes safety with multiple guardrails (instant reductions, default stop on meter unavailable, sanity checks on power readings, output clamping). However, it is provided **as-is** without warranty. It is a software load balancer, not a replacement for proper electrical protection. Always audit the code and test with your hardware before relying on it.

@@ -26,6 +26,7 @@ That's it. It's a reactive, real-time load balancer for a single EV charger.
 - **This does not monitor charger health.** The integration has no way to know if your charger is physically connected, responding, or actually applying the current it's told to set. Charger health monitoring is the responsibility of your charger integration (e.g., OCPP).
 - **This does not provide circuit-level protection.** The integration is a software load balancer. It is not a replacement for proper electrical protection (breakers, fuses, RCDs). Always ensure your electrical installation meets local codes.
 - **This does not support multiple chargers yet.** The current version supports exactly **one charger**. Only one instance of the integration can be configured. Multi-charger support with per-charger prioritization is planned for [Phase 2](milestones/02-2026-02-19-multi-charger-plan.md).
+- **This assumes a single-phase electrical supply.** All Watt ↔ Amp conversions use `P = V × I`. Three-phase installations require workarounds — see [Single-phase assumption and multi-phase installations](#single-phase-assumption-and-multi-phase-installations).
 - **This does not manage time-of-use tariffs or solar surplus directly.** The integration exclusively handles load balancing — it reacts to total metered power to prevent exceeding your service limit. However, it works well **alongside** external automations that handle these concerns. See [Combining with solar surplus or time-of-use tariffs](#combining-with-solar-surplus-or-time-of-use-tariffs) below.
 - **Current adjustments are in 1 A steps.** The integration floors all current values to whole Amps. Sub-amp precision is not supported.
 - **Increases are delayed.** After any current reduction **or any drop in available headroom from a previously usable level**, there's a configurable cooldown (default: 30 s, adjustable via `number.*_ramp_up_time`) before the integration allows the current to increase again. This is intentional — it prevents rapid oscillation when service load fluctuates near the service limit.
@@ -526,6 +527,59 @@ flowchart LR
 | **Output safety clamp** | A defense-in-depth clamp ensures the output never exceeds the charger maximum or service limit, even if there's a bug in the computation logic. |
 
 > ⚠️ **This integration is provided as-is without warranty.** It is a software load balancer, not a substitute for proper electrical protection. Always audit the code and test with your specific hardware before relying on it in production.
+
+---
+
+## Single-phase assumption and multi-phase installations
+
+The integration currently assumes a **single-phase** electrical supply. All Watt ↔ Amp conversions use the formula:
+
+```
+current_a = power_w / voltage_v
+```
+
+This is correct for single-phase circuits where `P = V × I`. In a **three-phase** installation the relationship between total power and per-phase current is different:
+
+```
+P_total = 3 × V_phase × I   (for balanced three-phase loads)
+P_total = √3 × V_line × I   (equivalent, using line-to-line voltage)
+```
+
+For example, a three-phase charger at 230 V per phase drawing 16 A per phase uses `3 × 230 × 16 = 11,040 W`, not `230 × 16 = 3,680 W`.
+
+### What this means in practice
+
+| Scenario | Impact | Recommended approach |
+|---|---|---|
+| **Single-phase charger on a single-phase service** | No issue — the formula is correct as-is. | Use the integration normally. Set voltage to your nominal mains voltage (e.g., 230 V). |
+| **Single-phase charger on one phase of a three-phase service** | The charger only draws from one phase. If your power meter reports **total** three-phase power, the conversion `total_w / V_phase` will overestimate the per-phase current and the integration will be overly conservative (safe, but suboptimal). | Use a per-phase power sensor for the phase the charger is connected to, or use a template sensor that extracts the relevant phase power. |
+| **Three-phase charger on a three-phase service** | The single-phase formula gives incorrect results. Setting voltage to the per-phase value (e.g., 230 V) will overestimate current by 3×, causing the integration to stop charging prematurely. | Not directly supported. See workarounds below. |
+
+### Workarounds for three-phase chargers
+
+If you have a three-phase charger and a meter reporting total three-phase power, you can approximate correct behavior with a **template sensor** that converts total power to effective single-phase-equivalent power:
+
+```yaml
+template:
+  - sensor:
+      - name: "Effective single-phase power"
+        unit_of_measurement: "W"
+        state: >
+          {{ (states('sensor.total_house_power_w') | float(0)) / 3 }}
+```
+
+Use this template sensor as the power meter input to the integration and set the voltage to your per-phase voltage (e.g., 230 V). The integration then computes per-phase current correctly: `(total_w / 3) / V_phase = total_w / (3 × V_phase)`.
+
+> ⚠️ **Important caveats:**
+>
+> - This workaround assumes a **balanced three-phase load**, which is rarely exact in residential installations. The actual per-phase current may differ from the calculated average.
+> - The `max_service_current` setting should be set to your **per-phase** breaker rating (e.g., 32 A for a 3 × 32 A service).
+> - **This is an approximation, not a substitute for proper electrical protection.** Phase imbalance, power factor, and transient loads can all cause the actual per-phase current to exceed the calculated value. Always ensure your electrical installation has appropriate breakers, fuses, and RCDs sized for your service.
+> - Multi-phase support with per-phase configuration is being considered for a future release.
+
+### Why the integration does not add a multi-phase setting today
+
+The current single-phase formula is correct for the most common use case (single-phase charger on a single-phase supply) and is conservative (safe-side) for most mixed scenarios. Adding a `number_of_phases` configuration would require changes to the core balancing logic, the config flow, and thorough testing of three-phase edge cases. This is outside the scope of the current MVP and may be addressed in a future release.
 
 ---
 
