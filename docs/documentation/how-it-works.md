@@ -554,10 +554,34 @@ For example, a three-phase charger at 230 V per phase drawing 16 A per phase use
 | **Single-phase charger on a single-phase service** | No issue — the formula is correct as-is. | Use the integration normally. Set voltage to your nominal mains voltage (e.g., 230 V). |
 | **Single-phase charger on one phase of a three-phase service** | The charger only draws from one phase. If your power meter reports **total** three-phase power, the conversion `total_w / V_phase` will overestimate the per-phase current and the integration will be overly conservative (safe, but suboptimal). | Use a per-phase power sensor for the phase the charger is connected to, or use a template sensor that extracts the relevant phase power. |
 | **Three-phase charger on a three-phase service** | The single-phase formula gives incorrect results. Setting voltage to the per-phase value (e.g., 230 V) will overestimate current by 3×, causing the integration to stop charging prematurely. | Not directly supported. See workarounds below. |
+| **Split-phase (two-phase) charger on a three-phase service** | The charger draws from two of three phases. Using total three-phase power or dividing by 3 gives incorrect per-phase estimates. | Not directly supported. See workarounds below (split-phase section). |
 
 ### Workarounds for three-phase chargers
 
-If you have a three-phase charger and a meter reporting total three-phase power, you can approximate correct behavior with a **template sensor** that converts total power to effective single-phase-equivalent power:
+The right workaround depends on whether your meter provides individual per-phase power sensors or only a single total-power reading. In all cases, set the integration's voltage to your **per-phase** voltage (e.g., 230 V) and `max_service_current` to your **per-phase** breaker rating (e.g., 32 A for a 3 × 32 A service).
+
+#### Option A — Per-phase sensors available (recommended)
+
+If your energy monitor exposes individual phase power sensors (e.g., `sensor.power_phase_a`, `sensor.power_phase_b`, `sensor.power_phase_c`), use a template sensor that picks the **highest** phase reading:
+
+```yaml
+template:
+  - sensor:
+      - name: "Worst-case phase power"
+        unit_of_measurement: "W"
+        state: >
+          {{ [
+            states('sensor.power_phase_a') | float(0),
+            states('sensor.power_phase_b') | float(0),
+            states('sensor.power_phase_c') | float(0)
+          ] | max }}
+```
+
+This is the safest approach because it balances against the **most loaded phase**, protecting against phase imbalance. The integration sees the worst-case per-phase power and limits current accordingly — no phase can exceed the breaker rating even when loads are unevenly distributed.
+
+#### Option B — Only total power available (balanced-load approximation)
+
+If your meter only reports total three-phase power, divide by 3 to get an average per-phase equivalent:
 
 ```yaml
 template:
@@ -568,13 +592,47 @@ template:
           {{ (states('sensor.total_house_power_w') | float(0)) / 3 }}
 ```
 
-Use this template sensor as the power meter input to the integration and set the voltage to your per-phase voltage (e.g., 230 V). The integration then computes per-phase current correctly: `(total_w / 3) / V_phase = total_w / (3 × V_phase)`.
+The integration then computes per-phase current correctly for balanced loads: `(total_w / 3) / V_phase = total_w / (3 × V_phase)`.
 
-> ⚠️ **Important caveats:**
+> ⚠️ **This assumes a balanced three-phase load**, which is rarely exact in residential installations. One phase may carry significantly more load than the others. If your installation has substantial single-phase loads (ovens, dryers, heat pumps) unevenly distributed across phases, use Option A instead — or reduce `max_service_current` by a few Amps to add a safety margin for the imbalance.
+
+#### Split-phase chargers on a three-phase service
+
+Some chargers connect across only **two phases** of a three-phase service (split-phase or dual-phase configuration). In this case, the charger draws from two phases but not the third.
+
+If you have per-phase sensors, use a template sensor that picks the **highest** of the two phases the charger is connected to:
+
+```yaml
+template:
+  - sensor:
+      - name: "Worst-case charger phase power"
+        unit_of_measurement: "W"
+        state: >
+          {{ [
+            states('sensor.power_phase_a') | float(0),
+            states('sensor.power_phase_b') | float(0)
+          ] | max }}
+```
+
+Replace the sensor entity IDs with the two phases your charger uses. Set `max_service_current` to the per-phase breaker rating for those phases.
+
+If you only have a total-power sensor, divide by the number of phases the charger uses (2 instead of 3):
+
+```yaml
+template:
+  - sensor:
+      - name: "Effective split-phase power"
+        unit_of_measurement: "W"
+        state: >
+          {{ (states('sensor.total_house_power_w') | float(0)) / 2 }}
+```
+
+The same balanced-load caveat applies — this approximation is less accurate when the two phases carry uneven loads.
+
+> ⚠️ **Important caveats for all multi-phase workarounds:**
 >
-> - This workaround assumes a **balanced three-phase load**, which is rarely exact in residential installations. The actual per-phase current may differ from the calculated average.
-> - The `max_service_current` setting should be set to your **per-phase** breaker rating (e.g., 32 A for a 3 × 32 A service). This is correct because the template sensor already divides total power by 3, so the integration effectively operates on per-phase values — entering the per-phase limit ensures each phase stays within its rated capacity.
-> - **This is an approximation, not a substitute for proper electrical protection.** Phase imbalance, power factor, and transient loads can all cause the actual per-phase current to exceed the calculated value. Always ensure your electrical installation has appropriate breakers, fuses, and RCDs sized for your service.
+> - The `max_service_current` setting should be set to your **per-phase** breaker rating (e.g., 32 A for a 3 × 32 A service). The template sensor already reduces the power to per-phase values, so the integration effectively operates on a single-phase basis — entering the per-phase limit ensures each phase stays within its rated capacity.
+> - **These are approximations, not a substitute for proper electrical protection.** Phase imbalance, power factor, and transient loads can all cause the actual per-phase current to exceed the calculated value. Always ensure your electrical installation has appropriate breakers, fuses, and RCDs sized for your service.
 > - Multi-phase support with per-phase configuration is being considered for a future release.
 
 ### Why the integration does not add a multi-phase setting today
