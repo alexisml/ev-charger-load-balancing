@@ -19,7 +19,6 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.ev_lb.const import (
     ACTION_MAX_RETRIES,
-    DOMAIN,
     EVENT_ACTION_FAILED,
 )
 from conftest import (
