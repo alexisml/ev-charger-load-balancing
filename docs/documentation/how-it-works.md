@@ -237,10 +237,10 @@ Then the safety rules apply:
 ```mermaid
 flowchart TD
     A([Trigger event])
-    A --> Z{"Charger status sensor\nconfigured?"}
-    Z -- "No sensor / unknown state" --> ZA["ev_estimate = current_set_a\n(assume charging)"]
+    A --> Z{"Charger status sensor<br/>configured?"}
+    Z -- "No sensor / unknown state" --> ZA["ev_estimate = current_set_a<br/>(assume charging)"]
     Z -- "Sensor state == 'Charging'" --> ZA
-    Z -- "Sensor state != 'Charging'" --> ZB["ev_estimate = 0\n(EV not drawing)"]
+    Z -- "Sensor state != 'Charging'" --> ZB["ev_estimate = 0<br/>(EV not drawing)"]
     ZA --> B["Isolate non-EV load<br/>non_ev_w = max(0, house_w − ev_estimate × V)"]
     ZB --> B
     B --> C["available_a = service_a − non_ev_w / V<br/>target_a = min(available_a, max_charger_a), floor to 1 A step"]
@@ -500,12 +500,12 @@ sequenceDiagram
     participant Meter as Power Meter
 
     HA->>LB: Startup — load integration
-    LB->>Sensors: Restore last known values<br/>(current, headroom, state, switch)
-    Note over LB: No commands sent yet<br/>Waiting for HA to fully start
-    HA->>LB: EVENT_HOMEASSISTANT_STARTED<br/>(all integrations loaded)
+    LB->>Sensors: Restore last known values (current, headroom, state, switch)
+    Note over LB: No commands sent yet — waiting for HA to fully start
+    HA->>LB: EVENT_HOMEASSISTANT_STARTED (all integrations loaded)
     LB->>Meter: Check meter state
     alt Meter is unavailable
-        LB->>LB: Apply configured fallback<br/>(stop / ignore / set_current)
+        LB->>LB: Apply configured fallback (stop / ignore / set_current)
         LB->>Sensors: Update entity states
     else Meter is healthy
         Note over LB: Wait for first meter event
