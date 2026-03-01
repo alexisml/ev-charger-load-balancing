@@ -30,6 +30,8 @@ from custom_components.ev_lb.const import (
     EVENT_METER_UNAVAILABLE,
     REASON_FALLBACK_UNAVAILABLE,
     REASON_POWER_METER_UPDATE,
+    UNAVAILABLE_BEHAVIOR_SET_CURRENT,
+    UNAVAILABLE_BEHAVIOR_STOP,
 )
 from conftest import (
     POWER_METER,
@@ -89,7 +91,7 @@ class TestActionFailureDuringMeterFallback:
         self, hass: HomeAssistant,
     ) -> None:
         """Charging stops and health entities update even when the stop action script fails."""
-        entry = _entry_with_actions_and_fallback("stop")
+        entry = _entry_with_actions_and_fallback(UNAVAILABLE_BEHAVIOR_STOP)
         await setup_integration(hass, entry)
         coordinator = no_sleep_coordinator(hass, entry)
         coordinator.ramp_up_time_s = 0.0
@@ -140,7 +142,7 @@ class TestActionFailureDuringMeterFallback:
         self, hass: HomeAssistant,
     ) -> None:
         """Fallback current is applied and health entities update even when the set_current action fails."""
-        entry = _entry_with_actions_and_fallback("set_current", fallback_a=8.0)
+        entry = _entry_with_actions_and_fallback(UNAVAILABLE_BEHAVIOR_SET_CURRENT, fallback_a=8.0)
         await setup_integration(hass, entry)
         no_sleep_coordinator(hass, entry)
 
@@ -189,7 +191,7 @@ class TestActionFailureDuringRecovery:
         self, hass: HomeAssistant,
     ) -> None:
         """Correct charging current is computed on meter recovery even when actions fail."""
-        entry = _entry_with_actions_and_fallback("stop")
+        entry = _entry_with_actions_and_fallback(UNAVAILABLE_BEHAVIOR_STOP)
         await setup_integration(hass, entry)
         coordinator = no_sleep_coordinator(hass, entry)
         coordinator.ramp_up_time_s = 0.0
@@ -235,7 +237,7 @@ class TestActionFailureDuringRecovery:
         self, hass: HomeAssistant,
     ) -> None:
         """Transition from fallback current to computed current is correct despite action failure at recovery."""
-        entry = _entry_with_actions_and_fallback("set_current", fallback_a=10.0)
+        entry = _entry_with_actions_and_fallback(UNAVAILABLE_BEHAVIOR_SET_CURRENT, fallback_a=10.0)
         await setup_integration(hass, entry)
         coordinator = no_sleep_coordinator(hass, entry)
 
@@ -290,7 +292,7 @@ class TestMeterFlappingWithActionFailures:
         self, hass: HomeAssistant,
     ) -> None:
         """Rapid meter unavailable/recovery cycles with failing actions result in correct final state."""
-        entry = _entry_with_actions_and_fallback("stop")
+        entry = _entry_with_actions_and_fallback(UNAVAILABLE_BEHAVIOR_STOP)
         await setup_integration(hass, entry)
         coordinator = no_sleep_coordinator(hass, entry)
         coordinator.ramp_up_time_s = 0.0
@@ -331,7 +333,7 @@ class TestMeterFlappingWithActionFailures:
         self, hass: HomeAssistant,
     ) -> None:
         """System recovers fully when the meter stabilises and actions start working again."""
-        entry = _entry_with_actions_and_fallback("stop")
+        entry = _entry_with_actions_and_fallback(UNAVAILABLE_BEHAVIOR_STOP)
         await setup_integration(hass, entry)
         coordinator = no_sleep_coordinator(hass, entry)
         coordinator.ramp_up_time_s = 0.0
