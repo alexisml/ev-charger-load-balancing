@@ -595,7 +595,7 @@ class TestCoordinatorDeferredStartup:
         # Coordinator remains in its initial state — callback did nothing
         assert coordinator.meter_healthy is True
 
-    async def test_deferred_startup_recomputes_when_meter_available_at_ha_start(
+    async def test_charging_starts_immediately_when_meter_healthy_at_ha_boot(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Coordinator performs its first real calculation when HA finishes loading and the meter is healthy."""

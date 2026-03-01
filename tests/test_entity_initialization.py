@@ -93,7 +93,7 @@ class TestSensorDefaultsAndRestore:
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
         assert coordinator.current_set_a == 0.0
 
-    async def test_first_meter_update_triggers_real_calculation_after_restart(
+    async def test_charging_resumes_after_first_real_calculation(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
         """Charging resumes from a real calculation after restart, not from the cached value."""
