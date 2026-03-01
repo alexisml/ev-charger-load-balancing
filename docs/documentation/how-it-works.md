@@ -37,13 +37,34 @@ The integration focuses exclusively on **load balancing** — ensuring your home
 
 **Solar surplus charging:** Create a template sensor that calculates your available solar surplus in Amps, then use an automation to write that value to `number.*_max_charger_current`. The load balancer will use it as the upper limit and ensure the charger never exceeds your service limit on top of that. **When the surplus drops to 0 A, charging stops automatically** — setting max charger current to 0 bypasses the balancing algorithm entirely and outputs 0 A/0 W.
 
+**Step 1 — Create a template sensor** that converts your solar surplus to Amps. Add this to your `configuration.yaml` (adjust entity IDs and voltage to match your setup):
+
+```yaml
+# Template sensor: solar surplus in Amps
+# Uses grid export power — power your home is sending back to the grid,
+# meaning it's not needed by household loads and can be used for EV charging.
+template:
+  - sensor:
+      - name: "Solar surplus amps"
+        unit_of_measurement: "A"
+        device_class: current
+        state: >
+          {% set export_w = states('sensor.grid_export_power') | float(0) %}
+          {% set voltage = 230 %}
+          {{ (export_w / voltage) | round(1) }}
+```
+
+> **Tip — which sensor to use?** If your energy monitor provides a grid export power sensor (positive = exporting to grid), that is the simplest choice. If you only have solar production and grid import sensors, subtract grid import from solar production: `{% set surplus_w = solar_w - grid_import_w %}`. Clamp to zero to avoid negative values: `{{ [surplus_w, 0] | max }}`.
+
+**Step 2 — Create an automation** that writes the surplus value to the charger's max current:
+
 ```yaml
 # Example: automation to set charger max from solar surplus
 automation:
   - alias: "Set EV max current from solar surplus"
     trigger:
       - platform: state
-        entity_id: sensor.solar_surplus_amps  # your template sensor
+        entity_id: sensor.solar_surplus_amps  # template sensor from Step 1
     action:
       - action: number.set_value
         target:
