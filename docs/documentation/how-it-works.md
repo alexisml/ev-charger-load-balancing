@@ -545,7 +545,7 @@ P_total = 3 × V_phase × I   (for balanced three-phase loads)
 P_total = √3 × V_line × I   (equivalent, using line-to-line voltage)
 ```
 
-For example, a three-phase charger at 230 V per phase drawing 16 A per phase uses `3 × 230 × 16 = 11,040 W`, not `230 × 16 = 3,680 W`.
+For example, a three-phase charger at 230 V per phase drawing 16 A per phase uses `3 × 230 × 16 = 11,040 W` (assuming unity power factor), not `230 × 16 = 3,680 W`.
 
 ### What this means in practice
 
@@ -573,7 +573,7 @@ Use this template sensor as the power meter input to the integration and set the
 > ⚠️ **Important caveats:**
 >
 > - This workaround assumes a **balanced three-phase load**, which is rarely exact in residential installations. The actual per-phase current may differ from the calculated average.
-> - The `max_service_current` setting should be set to your **per-phase** breaker rating (e.g., 32 A for a 3 × 32 A service).
+> - The `max_service_current` setting should be set to your **per-phase** breaker rating (e.g., 32 A for a 3 × 32 A service). This is correct because the template sensor already divides total power by 3, so the integration effectively operates on per-phase values — entering the per-phase limit ensures each phase stays within its rated capacity.
 > - **This is an approximation, not a substitute for proper electrical protection.** Phase imbalance, power factor, and transient loads can all cause the actual per-phase current to exceed the calculated value. Always ensure your electrical installation has appropriate breakers, fuses, and RCDs sized for your service.
 > - Multi-phase support with per-phase configuration is being considered for a future release.
 
