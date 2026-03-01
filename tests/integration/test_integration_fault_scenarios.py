@@ -56,7 +56,13 @@ from conftest import (
 
 
 def _entry_with_actions_and_fallback(behavior: str, fallback_a: float = 10.0) -> MockConfigEntry:
-    """Create a config entry with action scripts and a specific fallback behavior."""
+    """Create a config entry with action scripts and a specific fallback behavior.
+
+    ``behavior`` must be one of the ``UNAVAILABLE_BEHAVIOR_*`` constants
+    (``"stop"``, ``"ignore"``, ``"set_current"``).  ``fallback_a`` is the
+    safe current (Amps) applied in ``set_current`` mode when the meter is
+    unavailable.
+    """
     return MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -210,9 +216,12 @@ class TestServiceCallTimeout:
         assert coordinator.last_action_status == "failure"
         assert coordinator.retry_count == ACTION_MAX_RETRIES
 
-        # Sleep should have been called with exponential backoff delays
+        # Sleep should have been called with exponential backoff delays.
+        # Each failing action produces ACTION_MAX_RETRIES sleep calls with
+        # delays 2^0=1 s, 2^1=2 s, 2^2=4 s (base delay × 2^attempt).
         sleep_calls = [c.args[0] for c in coordinator._sleep_fn.call_args_list]
         expected_pattern = [1.0, 2.0, 4.0]
+        # Each failed action produces the same backoff pattern; verify in chunks.
         for i in range(0, len(sleep_calls), ACTION_MAX_RETRIES):
             chunk = sleep_calls[i : i + ACTION_MAX_RETRIES]
             assert chunk == expected_pattern
@@ -521,7 +530,8 @@ class TestFallbackRecoveryWithActionFailure:
             await hass.async_block_till_done()
 
         # Coordinator computes from live meter despite action failure.
-        # With 10 A fallback as EV estimate: non_ev ≈ 3 A → available ≈ 29 A → 28 A
+        # Formula: service=3000W/230V≈13A, ev_estimate=10A (fallback),
+        # non_ev=13−10=3A, available=32−3=29A → clamped to charger max.
         recovered = float(hass.states.get(current_set_id).state)
         assert recovered > 0
         assert hass.states.get(fallback_active_id).state == "off"
