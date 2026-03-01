@@ -362,3 +362,153 @@ class TestDiagnosticSensors:
         # Should be an ISO timestamp
         assert "T" in state.state
         assert state.state != "unknown"
+
+    async def test_last_action_status_sensor_defaults_to_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """No action status is displayed before any charger commands are issued."""
+        await setup_integration(hass, mock_config_entry_with_actions)
+
+        sensor_id = get_entity_id(
+            hass, mock_config_entry_with_actions, "sensor", "last_action_status"
+        )
+        state = hass.states.get(sensor_id)
+        assert state is not None
+        assert state.state in ("unknown", "None", "none")
+
+    async def test_last_action_status_shows_success_after_action(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """Status shows 'success' after a charger command completes normally."""
+        async_mock_service(hass, "script", "turn_on")
+        await setup_integration(hass, mock_config_entry_with_actions)
+
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+
+        sensor_id = get_entity_id(
+            hass, mock_config_entry_with_actions, "sensor", "last_action_status"
+        )
+        state = hass.states.get(sensor_id)
+        assert state is not None
+        assert state.state == "success"
+
+    async def test_last_action_status_shows_failure_after_error(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """Status shows 'failure' when a charger command cannot be completed."""
+        await setup_integration(hass, mock_config_entry_with_actions)
+        no_sleep_coordinator(hass, mock_config_entry_with_actions)
+
+        with patch(
+            "homeassistant.core.ServiceRegistry.async_call",
+            side_effect=HomeAssistantError("Script not found"),
+        ):
+            hass.states.async_set(POWER_METER, "3000")
+            await hass.async_block_till_done()
+
+        sensor_id = get_entity_id(
+            hass, mock_config_entry_with_actions, "sensor", "last_action_status"
+        )
+        state = hass.states.get(sensor_id)
+        assert state is not None
+        assert state.state == "failure"
+
+    async def test_action_latency_sensor_defaults_to_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """No latency is displayed before any charger commands are issued."""
+        await setup_integration(hass, mock_config_entry_with_actions)
+
+        sensor_id = get_entity_id(
+            hass, mock_config_entry_with_actions, "sensor", "action_latency"
+        )
+        state = hass.states.get(sensor_id)
+        assert state is not None
+        assert state.state in ("unknown", "None", "none")
+
+    async def test_action_latency_sensor_updates_after_success(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """Action response time is recorded after a charger command succeeds."""
+        async_mock_service(hass, "script", "turn_on")
+        await setup_integration(hass, mock_config_entry_with_actions)
+
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+
+        sensor_id = get_entity_id(
+            hass, mock_config_entry_with_actions, "sensor", "action_latency"
+        )
+        state = hass.states.get(sensor_id)
+        assert state is not None
+        assert state.state != "unknown"
+        # Latency should be a non-negative number
+        assert float(state.state) >= 0
+
+    async def test_retry_count_sensor_defaults_to_none(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """No retry count is displayed before any charger commands are issued."""
+        await setup_integration(hass, mock_config_entry_with_actions)
+
+        sensor_id = get_entity_id(
+            hass, mock_config_entry_with_actions, "sensor", "retry_count"
+        )
+        state = hass.states.get(sensor_id)
+        assert state is not None
+        assert state.state in ("unknown", "None", "none")
+
+    async def test_retry_count_sensor_zero_on_first_try_success(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """Retry count is zero when charger commands succeed on the first attempt."""
+        async_mock_service(hass, "script", "turn_on")
+        await setup_integration(hass, mock_config_entry_with_actions)
+
+        hass.states.async_set(POWER_METER, "3000")
+        await hass.async_block_till_done()
+
+        sensor_id = get_entity_id(
+            hass, mock_config_entry_with_actions, "sensor", "retry_count"
+        )
+        state = hass.states.get(sensor_id)
+        assert state is not None
+        assert state.state == "0"
+
+    async def test_retry_count_sensor_reflects_retries_on_failure(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_with_actions: MockConfigEntry,
+    ) -> None:
+        """Retry count reflects the number of retries when all attempts are exhausted."""
+        await setup_integration(hass, mock_config_entry_with_actions)
+        no_sleep_coordinator(hass, mock_config_entry_with_actions)
+
+        with patch(
+            "homeassistant.core.ServiceRegistry.async_call",
+            side_effect=HomeAssistantError("Script not found"),
+        ):
+            hass.states.async_set(POWER_METER, "3000")
+            await hass.async_block_till_done()
+
+        sensor_id = get_entity_id(
+            hass, mock_config_entry_with_actions, "sensor", "retry_count"
+        )
+        state = hass.states.get(sensor_id)
+        assert state is not None
+        assert int(state.state) == ACTION_MAX_RETRIES

@@ -123,6 +123,11 @@ All entities are grouped under a single device called **EV Charger Load Balancer
 | `sensor.*_last_action_reason` | Diagnostic | Why the last recomputation happened. Values: `power_meter_update` (normal), `manual_override`, `fallback_unavailable`, `parameter_change`. |
 | `sensor.*_balancer_state` | Diagnostic | The integration's operational state right now — see [Balancer states](#balancer-states) below. |
 | `sensor.*_configured_fallback` | Diagnostic | What the integration is configured to do when the meter goes unavailable: `stop`, `ignore`, or `set_current`. |
+| `sensor.*_last_action_error` | Diagnostic | The error message from the last failed charger action call, or empty when the last action succeeded. Useful for debugging charger communication issues. |
+| `sensor.*_last_action_timestamp` | Diagnostic (timestamp) | When the last charger action call completed (success or failure). ISO 8601 format. |
+| `sensor.*_last_action_status` | Diagnostic | Result of the most recent charger action call: `success` or `failure`. Useful for automations that react to charger communication health. |
+| `sensor.*_action_latency` | Measurement (ms) | Wall-clock time of the last charger action call in milliseconds, including any retries. Cross-reference with `sensor.*_retry_count` to distinguish slow actions from retried ones. |
+| `sensor.*_retry_count` | Measurement | Number of retries used by the last charger action call. `0` = first-try success; higher values indicate transient communication issues. |
 
 ### Binary sensors
 

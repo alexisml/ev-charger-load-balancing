@@ -211,6 +211,11 @@ You don't need to enable debug logs for basic monitoring. These sensors give you
 | `sensor.*_balancer_state` | What is the balancer doing right now? (`stopped`, `active`, `adjusting`, `ramp_up_hold`, `disabled`) |
 | `sensor.*_configured_fallback` | What fallback did I configure? (`stop`, `ignore`, `set_current`) |
 | `sensor.*_last_action_reason` | Why did the last update happen? (`power_meter_update`, `manual_override`, `fallback_unavailable`, `parameter_change`) |
+| `sensor.*_last_action_status` | Did the last charger command succeed? (`success` / `failure`) |
+| `sensor.*_last_action_error` | What went wrong? (error message from the last failed action, empty on success) |
+| `sensor.*_last_action_timestamp` | When did the last charger command finish? (ISO 8601 timestamp) |
+| `sensor.*_action_latency` | How long did the last charger command take? (wall-clock ms including retries) |
+| `sensor.*_retry_count` | How many retries were needed? (`0` = first-try success) |
 | `binary_sensor.*_power_meter_status` | Is my meter working? (On = yes, Off = no) |
 | `binary_sensor.*_meter_fallback_active` | Is a fallback currently active? (On = yes, Off = no) |
 

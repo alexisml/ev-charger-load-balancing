@@ -85,6 +85,15 @@
       },
       "last_action_timestamp": {
         "name": "Última marca de tiempo de acción"
+      },
+      "last_action_status": {
+        "name": "Último estado de acción"
+      },
+      "action_latency": {
+        "name": "Latencia de acción"
+      },
+      "retry_count": {
+        "name": "Contador de reintentos de acción"
       }
     },
     "binary_sensor": {
