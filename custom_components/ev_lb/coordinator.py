@@ -209,9 +209,13 @@ class EvLoadBalancerCoordinator:
 
         if self.hass.is_running:
             # Integration was loaded after HA finished starting (e.g., added
-            # via the UI).  Entity platforms are already fully set up and
-            # dispatcher connections are live, so meter health can be evaluated
-            # and the fallback applied synchronously right now.
+            # via the UI or reloaded).  The state-change listener above will
+            # pick up the next meter event; if the meter is unavailable right
+            # now we apply the fallback immediately.  When the meter IS
+            # healthy we intentionally do NOT recompute here — the coordinator
+            # outputs 0 A until the next meter state-change triggers a real
+            # calculation, keeping the same safe-start contract as the boot
+            # path (no charging until a fresh reading arrives).
             meter_state = self.hass.states.get(self._power_meter_entity)
             if meter_state is None or meter_state.state in ("unavailable", "unknown"):
                 self.meter_healthy = False
@@ -241,12 +245,16 @@ class EvLoadBalancerCoordinator:
 
     @callback
     def _handle_ha_started(self, _event: Event) -> None:
-        """Evaluate meter health once HA has fully started.
+        """Evaluate meter health and run the first real calculation once HA has fully started.
 
         Called exactly once via ``EVENT_HOMEASSISTANT_STARTED``, at which
         point every integration has had a chance to register its entities.
         A missing or unavailable power-meter state at this point is a genuine
         problem rather than a transient startup artefact.
+
+        When the meter is healthy, an initial recompute is performed
+        immediately so the charger receives a calculated target as soon as
+        HA is ready rather than sitting at 0 A until the next meter event.
 
         Guards against the entry being unloaded before HA finishes starting
         by checking whether the state-change listener is still active.
@@ -260,6 +268,8 @@ class EvLoadBalancerCoordinator:
             self.meter_healthy = False
             self.fallback_active = True
             self._apply_fallback_current()
+        else:
+            self._force_recompute_from_meter()
         _LOGGER.debug(
             "HA started — power meter %s is %s",
             self._power_meter_entity,

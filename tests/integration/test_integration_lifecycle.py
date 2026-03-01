@@ -235,10 +235,10 @@ class TestHaRestartWithRestoreCache:
     a restart where the previous HA instance recorded specific state).
     """
 
-    async def test_fresh_start_with_restore_cache_syncs_to_coordinator(
+    async def test_fresh_start_with_restore_cache_starts_at_zero(
         self, hass: HomeAssistant, mock_config_entry: MockConfigEntry
     ) -> None:
-        """Entities restore from cache on a fresh start and sync their values to the coordinator."""
+        """Coordinator ignores restored current_set cache and starts at zero for a safe startup."""
         # Set up restore cache BEFORE first setup (simulating HA start with
         # cached state from a previous HA session)
         mock_restore_cache_with_extra_data(
@@ -253,16 +253,16 @@ class TestHaRestartWithRestoreCache:
 
         await setup_integration(hass, mock_config_entry)
 
-        # Verify restored values synced to coordinator
+        # Coordinator starts at 0 A — cached current_set is NOT restored
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
-        assert coordinator.current_set_a == 16.0
+        assert coordinator.current_set_a == 0.0
         assert coordinator.enabled is True
 
-        # Verify entities reflect restored state
+        # Sensor reflects the coordinator's zero value, not the cache
         current_set_id = get_entity_id(hass, mock_config_entry, "sensor", "current_set")
-        assert float(hass.states.get(current_set_id).state) == 16.0
+        assert float(hass.states.get(current_set_id).state) == 0.0
 
-        # Operation resumes from restored state
+        # First real meter event triggers a real calculation and charging resumes
         hass.states.async_set(POWER_METER, "5000")
         await hass.async_block_till_done()
 
