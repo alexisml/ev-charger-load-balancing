@@ -1,0 +1,53 @@
+# Watt-O-Balancer — OCPP: Set Current
+# Integration: lbbrhzn/ocpp (https://github.com/lbbrhzn/ocpp)
+#
+# This script sets the charging current on your OCPP charger.
+# The integration calls it whenever the target current changes.
+#
+# Received variables:
+#   current_a  — target current in Amps (float, e.g. 16.0)
+#   current_w  — target power in Watts  (float, e.g. 3680.0)
+#   charger_id — config entry ID (string)
+#
+# How to use:
+#   1. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   2. Switch to YAML mode and paste this content.
+#   3. Adjust conn_id if your charger has multiple connectors (most use 1).
+#   4. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_set_current
+#        Data:    { variables: { current_a: 10, current_w: 2300, charger_id: test } }
+#   5. Confirm your charger responds before wiring this to the integration.
+
+alias: EV LB - Set Current (OCPP)
+description: Set the EV charger current limit via OCPP
+mode: single
+fields:
+  current_a:
+    description: Target charging current in Amps
+    example: 16.0
+    selector:
+      number:
+        min: 0
+        max: 80
+        step: 1
+        unit_of_measurement: A
+  current_w:
+    description: Target charging power in Watts
+    example: 3680.0
+    selector:
+      number:
+        min: 0
+        max: 18400
+        step: 1
+        unit_of_measurement: W
+  charger_id:
+    description: Charger identifier
+    example: "abc123"
+    selector:
+      text:
+sequence:
+  - action: ocpp.set_charge_rate
+    data:
+      limit_amps: "{{ current_a | int }}"
+      conn_id: 1

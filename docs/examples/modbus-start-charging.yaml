@@ -1,0 +1,41 @@
+# Watt-O-Balancer — Modbus: Start Charging
+#
+# This script resumes charging by writing the minimum current (6 A) to the
+# register. The integration calls set_current immediately after with the
+# actual target, so the 6 A is transient.
+#
+# Received variables:
+#   charger_id — config entry ID (string)
+#
+# Important:
+#   - Adjust hub, unit, address, and value scaling to match your charger.
+#   - The value 60 assumes the register expects tenths of Amps (6.0 A × 10).
+#   - Some chargers require a separate enable/disable coil to resume.
+#     If so, add a write_coil step before the register write.
+#
+# How to use:
+#   1. Ensure the Modbus hub is configured in configuration.yaml.
+#   2. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   3. Switch to YAML mode and paste this content.
+#   4. Adjust hub, unit, address, and value for your charger.
+#   5. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_start_charging
+#        Data:    { variables: { charger_id: test } }
+#   6. Confirm your charger resumes before wiring this to the integration.
+
+alias: EV LB - Start Charging (Modbus)
+description: Resume EV charging via Modbus register write (set minimum 6 A)
+mode: single
+fields:
+  charger_id:
+    description: Charger identifier
+    selector:
+      text:
+sequence:
+  - action: modbus.write_register
+    data:
+      hub: charger
+      unit: 1
+      address: 100
+      value: 60

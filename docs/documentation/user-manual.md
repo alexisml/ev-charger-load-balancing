@@ -22,6 +22,7 @@ These focused guides provide deep-dive reference material for specific features:
 | Guide | Description |
 |---|---|
 | [Action Scripts Guide](action-scripts-guide.md) | Full reference for configuring charger action scripts (set current, stop, start) with examples for OCPP, REST, Modbus, and switch-based chargers. |
+| [Starter Script Templates](../examples/) | Ready-to-use YAML templates — copy, adjust, and use. |
 | [Event Notifications Guide](event-notifications-guide.md) | All event types, payloads, persistent notifications, and automation examples for mobile alerts. |
 | [Logging Guide](logging-guide.md) | Debug log setup, log level policy, example output, and the logging wrapper architecture. |
 

@@ -1,0 +1,36 @@
+# Watt-O-Balancer — REST API: Stop Charging
+#
+# This script stops charging via a REST command.
+# You must first define the rest_command in configuration.yaml (see below).
+#
+# Received variables:
+#   charger_id — config entry ID (string)
+#
+# Prerequisites — add to configuration.yaml:
+#
+#   rest_command:
+#     stop_charger:
+#       url: "http://YOUR_CHARGER_IP/api/stop"
+#       method: POST
+#
+# How to use:
+#   1. Add the rest_command above to your configuration.yaml and restart HA.
+#   2. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   3. Switch to YAML mode and paste this content.
+#   4. Replace the rest_command name if yours differs.
+#   5. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_stop_charging
+#        Data:    { variables: { charger_id: test } }
+#   6. Confirm your charger stops before wiring this to the integration.
+
+alias: EV LB - Stop Charging (REST)
+description: Stop EV charging via REST API
+mode: single
+fields:
+  charger_id:
+    description: Charger identifier
+    selector:
+      text:
+sequence:
+  - action: rest_command.stop_charger

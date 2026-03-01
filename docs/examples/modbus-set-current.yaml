@@ -1,0 +1,70 @@
+# Watt-O-Balancer — Modbus: Set Current
+#
+# This script sets the charging current via Modbus register write.
+# You must first configure the Modbus hub in configuration.yaml (see below).
+#
+# Received variables:
+#   current_a  — target current in Amps (float, e.g. 16.0)
+#   current_w  — target power in Watts  (float, e.g. 3680.0)
+#   charger_id — config entry ID (string)
+#
+# Prerequisites — add to configuration.yaml:
+#
+#   modbus:
+#     - name: charger
+#       type: tcp
+#       host: YOUR_CHARGER_IP
+#       port: 502
+#
+# Important:
+#   - Adjust hub, unit, address, and value scaling to match your charger's
+#     Modbus register map. The example below assumes the register expects
+#     tenths of Amps (e.g. 160 = 16.0 A). Check your charger documentation.
+#   - Some chargers use holding registers (write_register), others use
+#     coils (write_coil). Verify which your charger requires.
+#
+# How to use:
+#   1. Add the Modbus hub above to your configuration.yaml and restart HA.
+#   2. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   3. Switch to YAML mode and paste this content.
+#   4. Adjust hub, unit, address, and value formula for your charger.
+#   5. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_set_current
+#        Data:    { variables: { current_a: 10, current_w: 2300, charger_id: test } }
+#   6. Confirm your charger responds before wiring this to the integration.
+
+alias: EV LB - Set Current (Modbus)
+description: Set the EV charger current limit via Modbus register write
+mode: single
+fields:
+  current_a:
+    description: Target charging current in Amps
+    example: 16.0
+    selector:
+      number:
+        min: 0
+        max: 80
+        step: 1
+        unit_of_measurement: A
+  current_w:
+    description: Target charging power in Watts
+    example: 3680.0
+    selector:
+      number:
+        min: 0
+        max: 18400
+        step: 1
+        unit_of_measurement: W
+  charger_id:
+    description: Charger identifier
+    example: "abc123"
+    selector:
+      text:
+sequence:
+  - action: modbus.write_register
+    data:
+      hub: charger
+      unit: 1
+      address: 100
+      value: "{{ (current_a * 10) | int }}"

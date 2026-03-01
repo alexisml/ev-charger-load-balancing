@@ -1,0 +1,39 @@
+# Watt-O-Balancer — Modbus: Stop Charging
+#
+# This script stops charging by writing 0 to the current register.
+# You must first configure the Modbus hub in configuration.yaml.
+#
+# Received variables:
+#   charger_id — config entry ID (string)
+#
+# Important:
+#   - Adjust hub, unit, address to match your charger's Modbus register map.
+#   - Some chargers stop when current is set to 0; others require a separate
+#     enable/disable coil. Check your charger documentation and adjust.
+#
+# How to use:
+#   1. Ensure the Modbus hub is configured in configuration.yaml.
+#   2. In HA go to Settings → Automations & Scenes → Scripts → + Add Script.
+#   3. Switch to YAML mode and paste this content.
+#   4. Adjust hub, unit, address for your charger.
+#   5. Test from Developer Tools → Actions:
+#        Service: script.turn_on
+#        Target:  script.ev_lb_stop_charging
+#        Data:    { variables: { charger_id: test } }
+#   6. Confirm your charger stops before wiring this to the integration.
+
+alias: EV LB - Stop Charging (Modbus)
+description: Stop EV charging via Modbus register write (set to 0)
+mode: single
+fields:
+  charger_id:
+    description: Charger identifier
+    selector:
+      text:
+sequence:
+  - action: modbus.write_register
+    data:
+      hub: charger
+      unit: 1
+      address: 100
+      value: 0
